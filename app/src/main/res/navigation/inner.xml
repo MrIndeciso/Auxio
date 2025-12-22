@@ -13,6 +13,9 @@
             android:id="@+id/search"
             app:destination="@id/search_fragment" />
         <action
+            android:id="@+id/show_stats"
+            app:destination="@id/stats_fragment" />
+        <action
             android:id="@+id/sort_songs"
             app:destination="@+id/song_sort_dialog" />
         <action
@@ -573,4 +576,9 @@
         android:name="org.oxycblt.auxio.music.locations.LocationsDialog"
         android:label="music_locations_dialog"
         tools:layout="@layout/dialog_music_locations" />
+    <fragment
+        android:id="@+id/stats_fragment"
+        android:name="org.oxycblt.auxio.stats.StatsFragment"
+        android:label="@string/lbl_stats"
+        tools:layout="@layout/fragment_stats" />
 </navigation>

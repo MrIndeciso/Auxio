@@ -213,6 +213,11 @@ class HomeFragment :
                 findNavController().navigateSafe(HomeFragmentDirections.search())
                 true
             }
+            R.id.action_stats -> {
+                L.d("Navigating to stats")
+                findNavController().navigateSafe(HomeFragmentDirections.showStats())
+                true
+            }
             R.id.action_settings -> {
                 L.d("Navigating to preferences")
                 homeModel.showSettings()
