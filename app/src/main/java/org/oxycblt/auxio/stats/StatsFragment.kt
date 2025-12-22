@@ -22,6 +22,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -58,6 +59,35 @@ class StatsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        // Setup time period selector
+        val timePeriodLabels =
+            mapOf(
+                TimePeriod.ALL_TIME to getString(R.string.lbl_all_time),
+                TimePeriod.THIS_YEAR to getString(R.string.lbl_this_year),
+                TimePeriod.LAST_YEAR to getString(R.string.lbl_last_year),
+                TimePeriod.LAST_12_MONTHS to getString(R.string.lbl_last_12_months),
+                TimePeriod.THIS_MONTH to getString(R.string.lbl_this_month),
+                TimePeriod.LAST_MONTH to getString(R.string.lbl_last_month),
+                TimePeriod.THIS_WEEK to getString(R.string.lbl_this_week),
+                TimePeriod.LAST_WEEK to getString(R.string.lbl_last_week))
+
+        val adapter =
+            ArrayAdapter(
+                requireContext(),
+                android.R.layout.simple_dropdown_item_1line,
+                timePeriodLabels.values.toList())
+        binding.statsTimePeriodDropdown.setAdapter(adapter)
+
+        // Set default selection
+        binding.statsTimePeriodDropdown.setText(
+            timePeriodLabels[TimePeriod.ALL_TIME], false)
+
+        // Handle selection changes
+        binding.statsTimePeriodDropdown.setOnItemClickListener { _, _, position, _ ->
+            val selectedPeriod = timePeriodLabels.keys.toList()[position]
+            statsViewModel.setTimePeriod(selectedPeriod)
+        }
 
         binding.statsTopSongsRecycler.apply {
             layoutManager = LinearLayoutManager(requireContext())

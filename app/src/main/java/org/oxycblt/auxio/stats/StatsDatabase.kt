@@ -34,7 +34,7 @@ import org.oxycblt.musikr.Music
  *
  * @author Auxio Project
  */
-@Database(entities = [SongStats::class], version = 1, exportSchema = false)
+@Database(entities = [SongStats::class, PlayEvent::class], version = 2, exportSchema = false)
 @TypeConverters(Music.UID.TypeConverters::class)
 abstract class StatsDatabase : RoomDatabase() {
     /**
@@ -92,6 +92,40 @@ interface StatsDao {
     @Query("SELECT SUM(playCount) FROM SongStats") suspend fun getTotalPlayCount(): Long?
 
     /**
+     * Get play events for a song within a time range.
+     *
+     * @param songUid The UID of the song.
+     * @param startTimestamp Start of the time range (inclusive).
+     * @param endTimestamp End of the time range (inclusive).
+     * @return List of [PlayEvent]s for the song within the time range.
+     */
+    @Query(
+        "SELECT * FROM PlayEvent WHERE songUid = :songUid AND timestamp >= :startTimestamp AND timestamp <= :endTimestamp ORDER BY timestamp DESC")
+    suspend fun getPlayEvents(
+        songUid: Music.UID,
+        startTimestamp: Long,
+        endTimestamp: Long
+    ): List<PlayEvent>
+
+    /**
+     * Get all play events within a time range.
+     *
+     * @param startTimestamp Start of the time range (inclusive).
+     * @param endTimestamp End of the time range (inclusive).
+     * @return List of all [PlayEvent]s within the time range.
+     */
+    @Query(
+        "SELECT * FROM PlayEvent WHERE timestamp >= :startTimestamp AND timestamp <= :endTimestamp ORDER BY timestamp DESC")
+    suspend fun getAllPlayEvents(startTimestamp: Long, endTimestamp: Long): List<PlayEvent>
+
+    /**
+     * Insert a play event.
+     *
+     * @param event The [PlayEvent] to insert.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertPlayEvent(event: PlayEvent)
+
+    /**
      * Insert or update song stats.
      *
      * @param stats The [SongStats] to insert or update.
@@ -116,4 +150,20 @@ data class SongStats(
     val playCount: Long,
     val totalListenTimeMs: Long,
     val lastPlayedTimestamp: Long
+)
+
+/**
+ * Represents a single play event for a song.
+ *
+ * @param id Auto-generated unique ID for the play event.
+ * @param songUid The unique identifier of the song that was played.
+ * @param timestamp The timestamp when the song was played.
+ * @param listenTimeMs The duration the song was listened to in milliseconds.
+ */
+@Entity
+data class PlayEvent(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val songUid: Music.UID,
+    val timestamp: Long,
+    val listenTimeMs: Long
 )

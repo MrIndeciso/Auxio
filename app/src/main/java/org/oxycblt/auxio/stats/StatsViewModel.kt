@@ -41,7 +41,15 @@ class StatsViewModel @Inject constructor(private val statsRepository: StatsRepos
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
+    private val _selectedTimePeriod = MutableStateFlow(TimePeriod.ALL_TIME)
+    val selectedTimePeriod: StateFlow<TimePeriod> = _selectedTimePeriod
+
     init {
+        loadStats()
+    }
+
+    fun setTimePeriod(timePeriod: TimePeriod) {
+        _selectedTimePeriod.value = timePeriod
         loadStats()
     }
 
@@ -49,10 +57,11 @@ class StatsViewModel @Inject constructor(private val statsRepository: StatsRepos
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                val songStats = statsRepository.getAllSongStats()
-                val albumStats = statsRepository.getAlbumStats()
-                val artistStats = statsRepository.getArtistStats()
-                val overallStats = statsRepository.getOverallStats()
+                val timePeriod = _selectedTimePeriod.value
+                val songStats = statsRepository.getAllSongStats(timePeriod)
+                val albumStats = statsRepository.getAlbumStats(timePeriod)
+                val artistStats = statsRepository.getArtistStats(timePeriod)
+                val overallStats = statsRepository.getOverallStats(timePeriod)
 
                 _statsData.value =
                     StatsData(
