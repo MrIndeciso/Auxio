@@ -490,4 +490,16 @@
         <item quantity="one">%d second</item>
         <item quantity="other">%d seconds</item>
     </plurals>
+    <!-- Stats -->
+    <string name="lbl_stats">Stats</string>
+    <string name="lbl_overall_stats">Overall Stats</string>
+    <string name="lbl_total_time">Total Listening Time</string>
+    <string name="lbl_total_plays">Total Plays</string>
+    <string name="lbl_top_songs">Top Songs</string>
+    <string name="lbl_top_albums">Top Albums</string>
+    <string name="lbl_top_artists">Top Artists</string>
+    <string name="fmt_play_count">%d plays</string>
+    <string name="fmt_hours_minutes">%dh %dm</string>
+    <string name="fmt_minutes_seconds">%dm %ds</string>
+
 </resources>
