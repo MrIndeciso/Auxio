@@ -29,6 +29,7 @@ import org.oxycblt.auxio.ForegroundServiceNotification
 import org.oxycblt.auxio.IntegerTable
 import org.oxycblt.auxio.playback.state.DeferredPlayback
 import org.oxycblt.auxio.playback.state.PlaybackStateManager
+import org.oxycblt.auxio.stats.StatsTracker
 import org.oxycblt.auxio.widgets.WidgetComponent
 import timber.log.Timber as L
 
@@ -41,6 +42,7 @@ private constructor(
     sessionHolderFactory: MediaSessionHolder.Factory,
     widgetComponentFactory: WidgetComponent.Factory,
     systemReceiverFactory: SystemPlaybackReceiver.Factory,
+    private val statsTracker: StatsTracker,
 ) : PlaybackStateManager.Listener {
     class Factory
     @Inject
@@ -50,6 +52,7 @@ private constructor(
         private val sessionHolderFactory: MediaSessionHolder.Factory,
         private val widgetComponentFactory: WidgetComponent.Factory,
         private val systemReceiverFactory: SystemPlaybackReceiver.Factory,
+        private val statsTracker: StatsTracker,
     ) {
         fun create(context: Context, foregroundListener: ForegroundListener) =
             PlaybackServiceFragment(
@@ -59,7 +62,8 @@ private constructor(
                 exoHolderFactory,
                 sessionHolderFactory,
                 widgetComponentFactory,
-                systemReceiverFactory)
+                systemReceiverFactory,
+                statsTracker)
     }
 
     private val waitJob = Job()
@@ -75,6 +79,7 @@ private constructor(
         sessionHolder.attach()
         widgetComponent.attach()
         systemReceiver.attach()
+        statsTracker.attach()
         playbackManager.addListener(this)
         return sessionHolder.token
     }
@@ -126,6 +131,7 @@ private constructor(
     fun release() {
         waitJob.cancel()
         playbackManager.removeListener(this)
+        statsTracker.detach()
         systemReceiver.release()
         widgetComponent.release()
         sessionHolder.release()
