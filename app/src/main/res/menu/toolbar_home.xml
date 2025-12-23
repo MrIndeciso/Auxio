@@ -14,11 +14,6 @@
         app:showAsAction="ifRoom" />
 
     <item
-        android:id="@+id/action_stats"
-        android:title="@string/lbl_stats"
-        app:showAsAction="never" />
-
-    <item
         android:id="@+id/action_settings"
         android:title="@string/set_root_title"
         app:showAsAction="never" />

@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 package org.oxycblt.auxio.home
 
 import androidx.lifecycle.ViewModel
@@ -201,6 +201,9 @@ constructor(
             MusicType.PLAYLISTS -> {
                 _playlistInstructions.put(instructions)
                 _playlistList.value = homeGenerator.playlists()
+            }
+            MusicType.STATS -> {
+                // Not a music list
             }
         }
     }

@@ -270,7 +270,7 @@
     <string name="set_exclude_non_music_desc">Ignore audio files that are not music, such as podcasts</string>
     <string name="set_with_hidden">Include hidden files</string>
     <string name="set_with_hidden_desc">Include audio files that are hidden (ex. .cache)</string>
-    <string name="set_separators">Multi-value separators</string>
+    <string name="set_separators">Multi-.value separators</string>
     <string name="set_separators_desc">Configure characters that denote multiple tag values</string>
     <string name="set_separators_comma">Comma (,)</string>
     <string name="set_separators_semicolon">Semicolon (;)</string>
@@ -510,5 +510,10 @@
     <string name="fmt_play_count">%d plays</string>
     <string name="fmt_hours_minutes">%dh %dm</string>
     <string name="fmt_minutes_seconds">%dm %ds</string>
+    <string name="lbl_listening_habits">Listening Habits</string>
+    <string name="lbl_daily_average">Daily Average</string>
+    <string name="lbl_weekly_average">Weekly Average</string>
+    <string name="lbl_view_history">View History</string>
+    <string name="fmt_history_detail">%1$s • %2$s listened</string>
 
 </resources>

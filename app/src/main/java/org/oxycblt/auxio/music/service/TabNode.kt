@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 package org.oxycblt.auxio.music.service
 
 import org.oxycblt.auxio.R
@@ -39,7 +39,7 @@ sealed class TabNode {
     data object More : TabNode() {
         override val id = "more"
         override val nameRes = R.string.lbl_more
-        override val bitmapRes = R.drawable.ic_more_bitmap_24
+        override val bitmapRes = R.drawable.ic_more_24
     }
 
     data class Home(val type: MusicType) : TabNode() {
@@ -47,11 +47,12 @@ sealed class TabNode {
         override val bitmapRes: Int
             get() =
                 when (type) {
-                    MusicType.SONGS -> R.drawable.ic_song_bitmap_24
-                    MusicType.ALBUMS -> R.drawable.ic_album_bitmap_24
-                    MusicType.ARTISTS -> R.drawable.ic_artist_bitmap_24
-                    MusicType.GENRES -> R.drawable.ic_genre_bitmap_24
-                    MusicType.PLAYLISTS -> R.drawable.ic_playlist_bitmap_24
+                    MusicType.SONGS -> R.drawable.ic_song_24
+                    MusicType.ALBUMS -> R.drawable.ic_album_24
+                    MusicType.ARTISTS -> R.drawable.ic_artist_24
+                    MusicType.GENRES -> R.drawable.ic_genre_24
+                    MusicType.PLAYLISTS -> R.drawable.ic_playlist_24
+                    MusicType.STATS -> R.drawable.ic_time_24
                 }
 
         override val nameRes = type.nameRes

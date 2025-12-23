@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 package org.oxycblt.auxio.search
 
 import androidx.annotation.IdRes
@@ -197,6 +197,7 @@ constructor(
             MusicType.ARTISTS -> R.id.option_filter_artists
             MusicType.GENRES -> R.id.option_filter_genres
             MusicType.PLAYLISTS -> R.id.option_filter_playlists
+            MusicType.STATS -> R.id.option_filter_all
             // Null maps to filtering nothing.
             null -> R.id.option_filter_all
         }

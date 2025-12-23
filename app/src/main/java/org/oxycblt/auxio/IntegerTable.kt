@@ -79,8 +79,8 @@ object IntegerTable {
     //    const val PLAYBACK_MODE_IN_ARTIST = 0xA104
     //    /** PlaybackMode.IN_ALBUM (No longer used but still reserved) */
     //    const val PLAYBACK_MODE_IN_ALBUM = 0xA105
-    //    /** PlaybackMode.ALL_SONGS (No longer used but still reserved) */
-    //    const val PLAYBACK_MODE_ALL_SONGS = 0xA106
+    /** MusicMode.STATS */
+    const val MUSIC_MODE_STATS = 0xA106
     /** MusicMode.SONGS */
     const val MUSIC_MODE_SONGS = 0xA10B
     /** MusicMode.ALBUMS */

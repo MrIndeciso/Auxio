@@ -15,9 +15,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 package org.oxycblt.auxio.stats
 
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 import org.oxycblt.auxio.music.MusicRepository
 import org.oxycblt.musikr.Album
@@ -54,7 +57,10 @@ interface StatsRepository {
      * @param timePeriod The time period to filter by.
      * @return A list of [AlbumStatsInfo] for all albums with recorded stats in the time period.
      */
-    suspend fun getAlbumStats(timePeriod: TimePeriod = TimePeriod.ALL_TIME): List<AlbumStatsInfo>
+    suspend fun getAlbumStats(
+        timePeriod: TimePeriod = TimePeriod.ALL_TIME,
+        songStats: List<SongStatsInfo>? = null
+    ): List<AlbumStatsInfo>
 
     /**
      * Get aggregated statistics for artists within a time period.
@@ -62,7 +68,10 @@ interface StatsRepository {
      * @param timePeriod The time period to filter by.
      * @return A list of [ArtistStatsInfo] for all artists with recorded stats in the time period.
      */
-    suspend fun getArtistStats(timePeriod: TimePeriod = TimePeriod.ALL_TIME): List<ArtistStatsInfo>
+    suspend fun getArtistStats(
+        timePeriod: TimePeriod = TimePeriod.ALL_TIME,
+        songStats: List<SongStatsInfo>? = null
+    ): List<ArtistStatsInfo>
 
     /**
      * Get overall listening statistics within a time period.
@@ -70,7 +79,25 @@ interface StatsRepository {
      * @param timePeriod The time period to filter by.
      * @return [OverallStats] containing total play count and listen time for the time period.
      */
-    suspend fun getOverallStats(timePeriod: TimePeriod = TimePeriod.ALL_TIME): OverallStats
+    suspend fun getOverallStats(
+        timePeriod: TimePeriod = TimePeriod.ALL_TIME,
+        songStats: List<SongStatsInfo>? = null
+    ): OverallStats
+
+    /**
+     * Get daily listening statistics within a time period.
+     *
+     * @param timePeriod The time period to filter by.
+     * @return A list of [DailyStatsInfo] for each day in the time period.
+     */
+    suspend fun getDailyStats(timePeriod: TimePeriod = TimePeriod.ALL_TIME): List<DailyStatsInfo>
+
+    /**
+     * Get all play events, sorted by timestamp.
+     *
+     * @return A list of all [PlayEvent]s.
+     */
+    suspend fun getSongHistory(): List<PlayEvent>
 }
 
 class StatsRepositoryImpl
@@ -113,24 +140,29 @@ constructor(private val statsDao: StatsDao, private val musicRepository: MusicRe
         try {
             val library = musicRepository.library ?: return emptyList()
 
-            // For all-time, use the aggregated stats for better performance
+            // For all-time, prefer aggregated stats but fall back to events if none are available
             if (timePeriod == TimePeriod.ALL_TIME) {
-                val allStats = statsDao.getAllStatsByPlayCount()
-                return allStats.mapNotNull { stats ->
-                    val song = library.findSong(stats.songUid)
-                    song?.let {
-                        SongStatsInfo(
-                            song = it,
-                            playCount = stats.playCount,
-                            totalListenTimeMs = stats.totalListenTimeMs,
-                            lastPlayedTimestamp = stats.lastPlayedTimestamp)
+                val allStats = statsDao.getAllStatsByListenTime()
+                val mapped =
+                    allStats.mapNotNull { stats ->
+                        val song = library.findSong(stats.songUid)
+                        song?.let {
+                            SongStatsInfo(
+                                song = it,
+                                playCount = stats.playCount,
+                                totalListenTimeMs = stats.totalListenTimeMs,
+                                lastPlayedTimestamp = stats.lastPlayedTimestamp)
+                        }
                     }
+                if (mapped.isNotEmpty()) {
+                    return mapped
                 }
             }
 
-            // For specific time periods, use play events
+            // For specific time periods or as a fallback, use play events
             val (startTime, endTime) = timePeriod.getTimeRange()
-            val playEvents = statsDao.getAllPlayEvents(startTime, endTime)
+            val playEvents =
+                statsDao.getAllPlayEvents(startTime, endTime.takeIf { timePeriod != TimePeriod.ALL_TIME } ?: Long.MAX_VALUE)
 
             // Group by song and aggregate
             val songStatsMap = mutableMapOf<Music.UID, SongStatsAccumulator>()
@@ -156,7 +188,7 @@ constructor(private val statsDao: StatsDao, private val musicRepository: MusicRe
                         totalListenTimeMs = acc.totalListenTimeMs,
                         lastPlayedTimestamp = acc.lastPlayedTimestamp)
                 }
-                .sortedByDescending { it.playCount }
+                .sortedByDescending { it.totalListenTimeMs }
         } catch (e: Exception) {
             L.e("Failed to get song stats")
             L.e(e.stackTraceToString())
@@ -164,14 +196,16 @@ constructor(private val statsDao: StatsDao, private val musicRepository: MusicRe
         }
     }
 
-    override suspend fun getAlbumStats(timePeriod: TimePeriod): List<AlbumStatsInfo> {
+    override suspend fun getAlbumStats(
+        timePeriod: TimePeriod,
+        songStats: List<SongStatsInfo>?
+    ): List<AlbumStatsInfo> {
         try {
-            val library = musicRepository.library ?: return emptyList()
-            val songStats = getAllSongStats(timePeriod)
+            val songStatsForPeriod = songStats ?: getAllSongStats(timePeriod)
 
             val albumStatsMap = mutableMapOf<Music.UID, AlbumStatsAccumulator>()
 
-            for (stats in songStats) {
+            for (stats in songStatsForPeriod) {
                 val albumUid = stats.song.album.uid
 
                 val accumulator =
@@ -192,7 +226,7 @@ constructor(private val statsDao: StatsDao, private val musicRepository: MusicRe
                         totalPlayCount = acc.totalPlayCount,
                         totalListenTimeMs = acc.totalListenTimeMs)
                 }
-                .sortedByDescending { it.totalPlayCount }
+                .sortedByDescending { it.totalListenTimeMs }
         } catch (e: Exception) {
             L.e("Failed to get album stats")
             L.e(e.stackTraceToString())
@@ -200,14 +234,16 @@ constructor(private val statsDao: StatsDao, private val musicRepository: MusicRe
         }
     }
 
-    override suspend fun getArtistStats(timePeriod: TimePeriod): List<ArtistStatsInfo> {
+    override suspend fun getArtistStats(
+        timePeriod: TimePeriod,
+        songStats: List<SongStatsInfo>?
+    ): List<ArtistStatsInfo> {
         try {
-            val library = musicRepository.library ?: return emptyList()
-            val songStats = getAllSongStats(timePeriod)
+            val songStatsForPeriod = songStats ?: getAllSongStats(timePeriod)
 
             val artistStatsMap = mutableMapOf<Music.UID, ArtistStatsAccumulator>()
 
-            for (stats in songStats) {
+            for (stats in songStatsForPeriod) {
                 for (artist in stats.song.artists) {
                     val accumulator =
                         artistStatsMap.getOrPut(artist.uid) {
@@ -229,7 +265,7 @@ constructor(private val statsDao: StatsDao, private val musicRepository: MusicRe
                         totalPlayCount = acc.totalPlayCount,
                         totalListenTimeMs = acc.totalListenTimeMs)
                 }
-                .sortedByDescending { it.totalPlayCount }
+                .sortedByDescending { it.totalListenTimeMs }
         } catch (e: Exception) {
             L.e("Failed to get artist stats")
             L.e(e.stackTraceToString())
@@ -237,10 +273,14 @@ constructor(private val statsDao: StatsDao, private val musicRepository: MusicRe
         }
     }
 
-    override suspend fun getOverallStats(timePeriod: TimePeriod): OverallStats {
+    override suspend fun getOverallStats(
+        timePeriod: TimePeriod,
+        songStats: List<SongStatsInfo>?
+    ): OverallStats {
         try {
-            // For all-time, use the aggregated stats for better performance
-            if (timePeriod == TimePeriod.ALL_TIME) {
+            // For all-time, use the aggregated stats for better performance unless we already have
+            // pre-fetched song stats.
+            if (timePeriod == TimePeriod.ALL_TIME && songStats == null) {
                 val totalListenTime = statsDao.getTotalListenTime() ?: 0L
                 val totalPlayCount = statsDao.getTotalPlayCount() ?: 0L
                 return OverallStats(
@@ -248,15 +288,46 @@ constructor(private val statsDao: StatsDao, private val musicRepository: MusicRe
             }
 
             // For specific time periods, aggregate from play events
-            val songStats = getAllSongStats(timePeriod)
-            val totalPlayCount = songStats.sumOf { it.playCount }
-            val totalListenTime = songStats.sumOf { it.totalListenTimeMs }
+            val stats = songStats ?: getAllSongStats(timePeriod)
+            val totalPlayCount = stats.sumOf { it.playCount }
+            val totalListenTime = stats.sumOf { it.totalListenTimeMs }
             return OverallStats(
                 totalPlayCount = totalPlayCount, totalListenTimeMs = totalListenTime)
         } catch (e: Exception) {
             L.e("Failed to get overall stats")
             L.e(e.stackTraceToString())
             return OverallStats(0, 0)
+        }
+    }
+
+    override suspend fun getDailyStats(timePeriod: TimePeriod): List<DailyStatsInfo> {
+        try {
+            val zone = ZoneId.systemDefault()
+            val (startTime, endTime) = timePeriod.getTimeRange()
+            val playEvents = statsDao.getAllPlayEvents(startTime, endTime)
+
+            return playEvents
+                .filter { it.timestamp > 0 }
+                .groupBy { Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() }
+                .map { (date, events) ->
+                    DailyStatsInfo(
+                        date = date, totalListenTimeMs = events.sumOf { it.listenTimeMs })
+                }
+                .sortedBy { it.date }
+        } catch (e: Exception) {
+            L.e("Failed to get daily stats")
+            L.e(e.stackTraceToString())
+            return emptyList()
+        }
+    }
+
+    override suspend fun getSongHistory(): List<PlayEvent> {
+        return try {
+            statsDao.getAllPlayEvents()
+        } catch (e: Exception) {
+            L.e("Failed to get song history")
+            L.e(e.stackTraceToString())
+            emptyList()
         }
     }
 
@@ -328,3 +399,14 @@ data class ArtistStatsInfo(
  * @param totalListenTimeMs The total time spent listening to music in milliseconds.
  */
 data class OverallStats(val totalPlayCount: Long, val totalListenTimeMs: Long)
+
+/**
+ * Information about daily listening statistics.
+ *
+ * @param date The calendar date represented.
+ * @param totalListenTimeMs The total time spent listening to music on that day in milliseconds.
+ */
+data class DailyStatsInfo(
+    val date: LocalDate,
+    val totalListenTimeMs: Long
+)

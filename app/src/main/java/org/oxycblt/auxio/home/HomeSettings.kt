@@ -51,11 +51,16 @@ interface HomeSettings : Settings<HomeSettings.Listener> {
 class HomeSettingsImpl @Inject constructor(@ApplicationContext context: Context) :
     Settings.Impl<HomeSettings.Listener>(context), HomeSettings {
     override var homeTabs: Array<Tab>
-        get() =
-            Tab.fromIntCode(
+        get() {
+            var tabs = Tab.fromIntCode(
                 sharedPreferences.getInt(
                     getString(R.string.set_key_home_tabs), Tab.SEQUENCE_DEFAULT))
                 ?: unlikelyToBeNull(Tab.fromIntCode(Tab.SEQUENCE_DEFAULT))
+            if (tabs.none { it.type == MusicType.STATS }) {
+                tabs += Tab.Invisible(MusicType.STATS)
+            }
+            return tabs
+        }
         set(value) {
             sharedPreferences.edit {
                 putInt(getString(R.string.set_key_home_tabs), Tab.toIntCode(value))

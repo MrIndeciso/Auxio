@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 package org.oxycblt.auxio.home
 
 import android.annotation.SuppressLint
@@ -63,6 +63,7 @@ import org.oxycblt.auxio.music.PlaylistDecision
 import org.oxycblt.auxio.music.PlaylistMessage
 import org.oxycblt.auxio.playback.PlaybackDecision
 import org.oxycblt.auxio.playback.PlaybackViewModel
+import org.oxycblt.auxio.stats.StatsFragment
 import org.oxycblt.auxio.util.collect
 import org.oxycblt.auxio.util.collectImmediately
 import org.oxycblt.auxio.util.lazyReflectedField
@@ -213,11 +214,6 @@ class HomeFragment :
                 findNavController().navigateSafe(HomeFragmentDirections.search())
                 true
             }
-            R.id.action_stats -> {
-                L.d("Navigating to stats")
-                findNavController().navigateSafe(HomeFragmentDirections.showStats())
-                true
-            }
             R.id.action_settings -> {
                 L.d("Navigating to preferences")
                 homeModel.showSettings()
@@ -239,6 +235,7 @@ class HomeFragment :
                         MusicType.ARTISTS -> HomeFragmentDirections.sortArtists()
                         MusicType.GENRES -> HomeFragmentDirections.sortGenres()
                         MusicType.PLAYLISTS -> HomeFragmentDirections.sortPlaylists()
+                        MusicType.STATS -> return true
                     }
                 findNavController().navigateSafe(directions)
                 true
@@ -288,6 +285,7 @@ class HomeFragment :
                 MusicType.ARTISTS -> R.id.home_artist_recycler
                 MusicType.GENRES -> R.id.home_genre_recycler
                 MusicType.PLAYLISTS -> R.id.home_playlist_recycler
+                MusicType.STATS -> R.id.stats_scroll_view
             }
     }
 
@@ -507,6 +505,7 @@ class HomeFragment :
                 MusicType.ARTISTS -> ArtistListFragment()
                 MusicType.GENRES -> GenreListFragment()
                 MusicType.PLAYLISTS -> PlaylistListFragment()
+                MusicType.STATS -> StatsFragment()
             }
     }
 

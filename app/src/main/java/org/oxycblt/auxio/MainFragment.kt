@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 package org.oxycblt.auxio
 
 import android.os.Bundle
@@ -27,6 +27,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.core.view.ViewCompat
 import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
+import androidx.core.view.updatePadding
 import androidx.fragment.app.activityViewModels
 import androidx.navigation.findNavController
 import androidx.navigation.fragment.findNavController
@@ -437,7 +438,7 @@ class MainFragment :
             L.d("Hiding fab: [empty: ${songs.isEmpty()} scrolling: $isFastScrolling]")
             forceHideAllFabs()
         } else {
-            if (tabType != MusicType.PLAYLISTS) {
+            if (tabType != MusicType.PLAYLISTS && tabType != MusicType.STATS) {
                 if (binding.homeShuffleFab.isOrWillBeShown) {
                     return
                 }

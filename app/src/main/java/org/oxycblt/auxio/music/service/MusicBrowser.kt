@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 package org.oxycblt.auxio.music.service
 
 import android.content.Context
@@ -202,6 +202,7 @@ private constructor(
                     MusicType.ARTISTS -> homeGenerator.artists().map { it.toMediaItem(context) }
                     MusicType.GENRES -> homeGenerator.genres().map { it.toMediaItem(context) }
                     MusicType.PLAYLISTS -> homeGenerator.playlists().map { it.toMediaItem(context) }
+                    MusicType.STATS -> listOf()
                 }
         }
 

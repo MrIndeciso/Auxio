@@ -93,6 +93,9 @@
         <action
             android:id="@+id/choose_locations"
             app:destination="@id/music_locations_dialog" />
+        <action
+            android:id="@+id/action_home_fragment_to_songHistoryFragment"
+            app:destination="@id/songHistoryFragment" />
     </fragment>
 
     <dialog
@@ -581,4 +584,9 @@
         android:name="org.oxycblt.auxio.stats.StatsFragment"
         android:label="@string/lbl_stats"
         tools:layout="@layout/fragment_stats" />
+    <fragment
+        android:id="@+id/songHistoryFragment"
+        android:name="org.oxycblt.auxio.history.SongHistoryFragment"
+        android:label="fragment_song_history"
+        tools:layout="@layout/fragment_song_history" />
 </navigation>

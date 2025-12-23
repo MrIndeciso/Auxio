@@ -119,6 +119,14 @@ interface StatsDao {
     suspend fun getAllPlayEvents(startTimestamp: Long, endTimestamp: Long): List<PlayEvent>
 
     /**
+     * Get all play events.
+     *
+     * @return List of all [PlayEvent]s.
+     */
+    @Query("SELECT * FROM PlayEvent ORDER BY timestamp DESC")
+    suspend fun getAllPlayEvents(): List<PlayEvent>
+
+    /**
      * Insert a play event.
      *
      * @param event The [PlayEvent] to insert.

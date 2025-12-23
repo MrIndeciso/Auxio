@@ -15,16 +15,18 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 package org.oxycblt.auxio.stats
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber as L
 
 /**
@@ -58,17 +60,24 @@ class StatsViewModel @Inject constructor(private val statsRepository: StatsRepos
             try {
                 _isLoading.value = true
                 val timePeriod = _selectedTimePeriod.value
-                val songStats = statsRepository.getAllSongStats(timePeriod)
-                val albumStats = statsRepository.getAlbumStats(timePeriod)
-                val artistStats = statsRepository.getArtistStats(timePeriod)
-                val overallStats = statsRepository.getOverallStats(timePeriod)
+                val stats =
+                    withContext(Dispatchers.IO) {
+                        val songStats = statsRepository.getAllSongStats(timePeriod)
+                        val albumStats = statsRepository.getAlbumStats(timePeriod, songStats)
+                        val artistStats = statsRepository.getArtistStats(timePeriod, songStats)
+                        val overallStats = statsRepository.getOverallStats(timePeriod, songStats)
+                        val dailyStats = statsRepository.getDailyStats(timePeriod)
 
-                _statsData.value =
-                    StatsData(
-                        topSongs = songStats.take(10),
-                        topAlbums = albumStats.take(10),
-                        topArtists = artistStats.take(10),
-                        overallStats = overallStats)
+                        StatsData(
+                            timePeriod = timePeriod,
+                            topSongs = songStats.take(10),
+                            topAlbums = albumStats.take(10),
+                            topArtists = artistStats.take(10),
+                            overallStats = overallStats,
+                            dailyStats = dailyStats)
+                    }
+
+                _statsData.value = stats
             } catch (e: Exception) {
                 L.e("Failed to load stats")
                 L.e(e.stackTraceToString())
@@ -86,10 +95,13 @@ class StatsViewModel @Inject constructor(private val statsRepository: StatsRepos
  * @param topAlbums Top albums by play count.
  * @param topArtists Top artists by play count.
  * @param overallStats Overall listening statistics.
+ * @param dailyStats Daily listening statistics.
  */
 data class StatsData(
+    val timePeriod: TimePeriod,
     val topSongs: List<SongStatsInfo>,
     val topAlbums: List<AlbumStatsInfo>,
     val topArtists: List<ArtistStatsInfo>,
-    val overallStats: OverallStats
+    val overallStats: OverallStats,
+    val dailyStats: List<DailyStatsInfo>
 )

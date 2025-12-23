@@ -50,6 +50,7 @@ constructor(
     fun attach() {
         L.d("Attaching StatsTracker")
         playbackManager.addListener(this)
+        seedCurrentSong()
     }
 
     fun detach() {
@@ -62,14 +63,14 @@ constructor(
         // Song changed, record the previous session
         recordCurrentSession()
         currentSong = playbackManager.currentSong
-        playbackStartTime = System.currentTimeMillis()
+        playbackStartTime = android.os.SystemClock.elapsedRealtime()
     }
 
     override fun onQueueChanged(queue: List<Song>, index: Int, change: QueueChange) {
         // Queue changed with different song, record the previous session
         recordCurrentSession()
         currentSong = playbackManager.currentSong
-        playbackStartTime = System.currentTimeMillis()
+        playbackStartTime = android.os.SystemClock.elapsedRealtime()
     }
 
     override fun onNewPlayback(
@@ -81,7 +82,7 @@ constructor(
         // New playback started
         recordCurrentSession()
         currentSong = playbackManager.currentSong
-        playbackStartTime = System.currentTimeMillis()
+        playbackStartTime = android.os.SystemClock.elapsedRealtime()
         isPlaying = playbackManager.progression.isPlaying
     }
 
@@ -96,7 +97,7 @@ constructor(
 
         // If playback started, reset the timer
         if (!wasPlaying && isPlaying) {
-            playbackStartTime = System.currentTimeMillis()
+            playbackStartTime = android.os.SystemClock.elapsedRealtime()
         }
     }
 
@@ -110,7 +111,7 @@ constructor(
         val song = currentSong ?: return
         if (playbackStartTime == 0L) return
 
-        val listenTimeMs = System.currentTimeMillis() - playbackStartTime
+        val listenTimeMs = android.os.SystemClock.elapsedRealtime() - playbackStartTime
         // Only count if the song was played for at least 3 seconds
         if (listenTimeMs >= 3000) {
             scope.launch {
@@ -125,5 +126,15 @@ constructor(
 
         // Reset the timer
         playbackStartTime = 0L
+    }
+
+    private fun seedCurrentSong() {
+        val progression = playbackManager.progression
+        val song = playbackManager.currentSong ?: return
+        if (progression.isPlaying) {
+            currentSong = song
+            playbackStartTime = android.os.SystemClock.elapsedRealtime()
+            isPlaying = true
+        }
     }
 }
