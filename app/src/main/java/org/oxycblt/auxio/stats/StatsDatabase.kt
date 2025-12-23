@@ -127,6 +127,15 @@ interface StatsDao {
     suspend fun getAllPlayEvents(): List<PlayEvent>
 
     /**
+     * Get all play events for a song.
+     *
+     * @param songUid The UID of the song.
+     * @return List of [PlayEvent]s for the song.
+     */
+    @Query("SELECT * FROM PlayEvent WHERE songUid = :songUid ORDER BY timestamp DESC")
+    suspend fun getAllPlayEventsForSong(songUid: Music.UID): List<PlayEvent>
+
+    /**
      * Insert a play event.
      *
      * @param event The [PlayEvent] to insert.
@@ -139,6 +148,32 @@ interface StatsDao {
      * @param stats The [SongStats] to insert or update.
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertOrUpdateStats(stats: SongStats)
+
+    /**
+     * Delete stats for a song.
+     *
+     * @param songUid The UID of the song.
+     */
+    @Query("DELETE FROM SongStats WHERE songUid = :songUid")
+    suspend fun deleteSongStats(songUid: Music.UID)
+
+    /**
+     * Update a play event's timestamp and duration.
+     *
+     * @param id The event ID to update.
+     * @param timestamp The new timestamp.
+     * @param listenTimeMs The new listen duration.
+     */
+    @Query(
+        "UPDATE PlayEvent SET timestamp = :timestamp, listenTimeMs = :listenTimeMs WHERE id = :id")
+    suspend fun updatePlayEvent(id: Long, timestamp: Long, listenTimeMs: Long)
+
+    /**
+     * Delete a play event.
+     *
+     * @param id The event ID to delete.
+     */
+    @Query("DELETE FROM PlayEvent WHERE id = :id") suspend fun deletePlayEvent(id: Long)
 
     /** Delete all stats. */
     @Query("DELETE FROM SongStats") suspend fun nukeStats()

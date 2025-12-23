@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import org.oxycblt.musikr.Music
 import org.oxycblt.auxio.stats.PlayEvent
 import org.oxycblt.auxio.stats.StatsRepository
 
@@ -41,6 +42,20 @@ class SongHistoryViewModel @Inject constructor(private val statsRepository: Stat
 
     private fun loadHistory() {
         viewModelScope.launch(Dispatchers.IO) {
+            _history.value = statsRepository.getSongHistory()
+        }
+    }
+
+    fun updateEvent(id: Long, songUid: Music.UID, timestamp: Long, listenTimeMs: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            statsRepository.updatePlayEvent(id, songUid, timestamp, listenTimeMs)
+            _history.value = statsRepository.getSongHistory()
+        }
+    }
+
+    fun deleteEvent(id: Long, songUid: Music.UID) {
+        viewModelScope.launch(Dispatchers.IO) {
+            statsRepository.deletePlayEvent(id, songUid)
             _history.value = statsRepository.getSongHistory()
         }
     }

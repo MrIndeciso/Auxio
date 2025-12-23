@@ -98,6 +98,27 @@ interface StatsRepository {
      * @return A list of all [PlayEvent]s.
      */
     suspend fun getSongHistory(): List<PlayEvent>
+
+    /**
+     * Update a play event's timestamp and duration.
+     *
+     * @param id The event ID to update.
+     * @param timestamp The new timestamp.
+     * @param listenTimeMs The new listen duration.
+     */
+    suspend fun updatePlayEvent(
+        id: Long,
+        songUid: Music.UID,
+        timestamp: Long,
+        listenTimeMs: Long
+    )
+
+    /**
+     * Delete a play event.
+     *
+     * @param id The event ID to delete.
+     */
+    suspend fun deletePlayEvent(id: Long, songUid: Music.UID)
 }
 
 class StatsRepositoryImpl
@@ -329,6 +350,51 @@ constructor(private val statsDao: StatsDao, private val musicRepository: MusicRe
             L.e(e.stackTraceToString())
             emptyList()
         }
+    }
+
+    override suspend fun updatePlayEvent(
+        id: Long,
+        songUid: Music.UID,
+        timestamp: Long,
+        listenTimeMs: Long
+    ) {
+        try {
+            statsDao.updatePlayEvent(id, timestamp, listenTimeMs)
+            updateAggregatedStats(songUid)
+        } catch (e: Exception) {
+            L.e("Failed to update play event $id")
+            L.e(e.stackTraceToString())
+        }
+    }
+
+    override suspend fun deletePlayEvent(id: Long, songUid: Music.UID) {
+        try {
+            statsDao.deletePlayEvent(id)
+            updateAggregatedStats(songUid)
+        } catch (e: Exception) {
+            L.e("Failed to delete play event $id")
+            L.e(e.stackTraceToString())
+        }
+    }
+
+    private suspend fun updateAggregatedStats(songUid: Music.UID) {
+        val events = statsDao.getAllPlayEventsForSong(songUid)
+        if (events.isEmpty()) {
+            statsDao.deleteSongStats(songUid)
+            return
+        }
+
+        val totalListenTimeMs = events.sumOf { it.listenTimeMs }
+        val playCount = events.size.toLong()
+        val lastPlayedTimestamp = events.maxOf { it.timestamp }
+        statsDao.insertOrUpdateStats(
+            SongStats(
+                songUid = songUid,
+                playCount = playCount,
+                totalListenTimeMs = totalListenTimeMs,
+                lastPlayedTimestamp = lastPlayedTimestamp
+            )
+        )
     }
 
     private data class SongStatsAccumulator(

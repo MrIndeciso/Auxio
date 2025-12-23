@@ -30,7 +30,10 @@ import org.oxycblt.auxio.music.resolve
 import org.oxycblt.auxio.stats.PlayEvent
 import org.oxycblt.auxio.R
 
-class SongHistoryAdapter(private val musicRepository: MusicRepository) :
+class SongHistoryAdapter(
+    private val musicRepository: MusicRepository,
+    private val onItemClick: (PlayEvent) -> Unit
+) :
     ListAdapter<PlayEvent, SongHistoryAdapter.ViewHolder>(DiffCallback) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -75,6 +78,7 @@ class SongHistoryAdapter(private val musicRepository: MusicRepository) :
             val listenDuration = formatDuration(context, playEvent.listenTimeMs)
             binding.timestamp.text = relativeTime
             binding.duration.text = listenDuration
+            binding.root.setOnClickListener { onItemClick(playEvent) }
         }
     }
 

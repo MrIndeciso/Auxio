@@ -108,11 +108,14 @@ class StatsFragment : Fragment() {
                 TimePeriod.LAST_WEEK to getString(R.string.lbl_last_week))
 
         val timePeriodAdapter =
-            ArrayAdapter(
+            NoFilterArrayAdapter(
                 requireContext(),
                 android.R.layout.simple_dropdown_item_1line,
                 timePeriodOptions.map { it.second })
         binding.statsTimePeriodDropdown.setAdapter(timePeriodAdapter)
+        binding.statsTimePeriodDropdown.setOnClickListener {
+            binding.statsTimePeriodDropdown.showDropDown()
+        }
 
         // Handle selection changes
         binding.statsTimePeriodDropdown.setOnItemClickListener { _, _, position, _ ->
@@ -295,6 +298,28 @@ class StatsFragment : Fragment() {
 
     inner class MonthViewContainer(view: View) : ViewContainer(view) {
         val textView: TextView = ItemCalendarHeaderBinding.bind(view).calendarHeaderText
+    }
+
+    private class NoFilterArrayAdapter<T>(
+        context: android.content.Context,
+        resource: Int,
+        private val items: List<T>
+    ) : ArrayAdapter<T>(context, resource, items) {
+        override fun getFilter() =
+            object : android.widget.Filter() {
+                override fun performFiltering(constraint: CharSequence?) =
+                    android.widget.Filter.FilterResults().apply {
+                        values = items
+                        count = items.size
+                    }
+
+                override fun publishResults(constraint: CharSequence?, results: FilterResults?) {
+                    notifyDataSetChanged()
+                }
+
+                override fun convertResultToString(resultValue: Any?) =
+                    resultValue?.toString() ?: ""
+            }
     }
 
     private inner class SongStatsAdapter :

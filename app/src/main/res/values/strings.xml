@@ -92,7 +92,6 @@
     <string name="lbl_export_playlist">Export playlist</string>
     <string name="lbl_rename">Rename</string>
     <string name="lbl_rename_playlist">Rename playlist</string>
-    <string name="lbl_delete">Delete</string>
     <string name="lbl_confirm_delete_playlist">Delete playlist?</string>
     <string name="lbl_edit">Edit</string>
 
@@ -154,7 +153,6 @@
     <string name="lbl_ok">OK</string>
     <string name="lbl_cancel">Cancel</string>
     <!-- As in to save a setting -->
-    <string name="lbl_save">Save</string>
     <!-- as in to reset to a default setting -->
     <string name="lbl_reset">Reset</string>
     <!-- As in to add a new folder in the "Music folders" setting -->
@@ -515,5 +513,14 @@
     <string name="lbl_weekly_average">Weekly Average</string>
     <string name="lbl_view_history">View History</string>
     <string name="fmt_history_detail">%1$s • %2$s listened</string>
+    <string name="lbl_history_entry">History Entry</string>
+    <string name="lbl_edit_history_entry">Edit Entry</string>
+    <string name="lbl_delete_history_entry">Delete Entry</string>
+    <string name="msg_delete_history_entry">Delete this entry? This cannot be undone.</string>
+    <string name="lbl_history_edit_time">Played at (yyyy-MM-dd HH:mm)</string>
+    <string name="lbl_history_edit_duration">Duration (mm:ss or seconds)</string>
+    <string name="lbl_save">Save</string>
+    <string name="lbl_delete">Delete</string>
+    <string name="err_history_invalid_input">Enter a valid time and duration.</string>
 
 </resources>

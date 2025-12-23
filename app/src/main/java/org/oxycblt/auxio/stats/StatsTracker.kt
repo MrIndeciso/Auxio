@@ -44,7 +44,8 @@ constructor(
 ) : PlaybackStateManager.Listener {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var currentSong: Song? = null
-    private var playbackStartTime: Long = 0L
+    private var sessionListenMs: Long = 0L
+    private var lastPositionMs: Long? = null
     private var isPlaying = false
 
     fun attach() {
@@ -63,14 +64,16 @@ constructor(
         // Song changed, record the previous session
         recordCurrentSession()
         currentSong = playbackManager.currentSong
-        playbackStartTime = android.os.SystemClock.elapsedRealtime()
+        sessionListenMs = 0L
+        lastPositionMs = playbackManager.progression.calculateElapsedPositionMs()
     }
 
     override fun onQueueChanged(queue: List<Song>, index: Int, change: QueueChange) {
         // Queue changed with different song, record the previous session
         recordCurrentSession()
         currentSong = playbackManager.currentSong
-        playbackStartTime = android.os.SystemClock.elapsedRealtime()
+        sessionListenMs = 0L
+        lastPositionMs = playbackManager.progression.calculateElapsedPositionMs()
     }
 
     override fun onNewPlayback(
@@ -82,11 +85,13 @@ constructor(
         // New playback started
         recordCurrentSession()
         currentSong = playbackManager.currentSong
-        playbackStartTime = android.os.SystemClock.elapsedRealtime()
+        sessionListenMs = 0L
+        lastPositionMs = playbackManager.progression.calculateElapsedPositionMs()
         isPlaying = playbackManager.progression.isPlaying
     }
 
     override fun onProgressionChanged(progression: Progression) {
+        updateSessionFromProgression(progression)
         val wasPlaying = isPlaying
         isPlaying = progression.isPlaying
 
@@ -94,26 +99,23 @@ constructor(
         if (wasPlaying && !isPlaying) {
             recordCurrentSession()
         }
-
-        // If playback started, reset the timer
-        if (!wasPlaying && isPlaying) {
-            playbackStartTime = android.os.SystemClock.elapsedRealtime()
-        }
     }
 
     override fun onSessionEnded() {
         recordCurrentSession()
         currentSong = null
+        sessionListenMs = 0L
+        lastPositionMs = null
         isPlaying = false
     }
 
     private fun recordCurrentSession() {
         val song = currentSong ?: return
-        if (playbackStartTime == 0L) return
+        updateSessionFromProgression(playbackManager.progression)
 
-        val listenTimeMs = android.os.SystemClock.elapsedRealtime() - playbackStartTime
+        val listenTimeMs = sessionListenMs
         // Only count if the song was played for at least 3 seconds
-        if (listenTimeMs >= 3000) {
+        if (listenTimeMs >= 8000) {
             scope.launch {
                 try {
                     statsRepository.recordPlay(song, listenTimeMs)
@@ -124,8 +126,9 @@ constructor(
             }
         }
 
-        // Reset the timer
-        playbackStartTime = 0L
+        // Reset the session
+        sessionListenMs = 0L
+        lastPositionMs = null
     }
 
     private fun seedCurrentSong() {
@@ -133,8 +136,22 @@ constructor(
         val song = playbackManager.currentSong ?: return
         if (progression.isPlaying) {
             currentSong = song
-            playbackStartTime = android.os.SystemClock.elapsedRealtime()
+            sessionListenMs = 0L
+            lastPositionMs = progression.calculateElapsedPositionMs()
             isPlaying = true
         }
+    }
+
+    private fun updateSessionFromProgression(progression: Progression) {
+        if (currentSong == null) {
+            return
+        }
+        val newPosition = progression.calculateElapsedPositionMs()
+        val lastPosition = lastPositionMs
+        if (lastPosition != null) {
+            val delta = (newPosition - lastPosition).coerceAtLeast(0)
+            sessionListenMs += delta
+        }
+        lastPositionMs = newPosition
     }
 }
