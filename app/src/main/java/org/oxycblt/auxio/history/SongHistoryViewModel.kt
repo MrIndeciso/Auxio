@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
+ 
 package org.oxycblt.auxio.history
 
 import androidx.lifecycle.ViewModel
@@ -26,9 +26,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import org.oxycblt.musikr.Music
 import org.oxycblt.auxio.stats.PlayEvent
 import org.oxycblt.auxio.stats.StatsRepository
+import org.oxycblt.musikr.Music
 
 @HiltViewModel
 class SongHistoryViewModel @Inject constructor(private val statsRepository: StatsRepository) :
@@ -41,9 +41,7 @@ class SongHistoryViewModel @Inject constructor(private val statsRepository: Stat
     }
 
     private fun loadHistory() {
-        viewModelScope.launch(Dispatchers.IO) {
-            _history.value = statsRepository.getSongHistory()
-        }
+        viewModelScope.launch(Dispatchers.IO) { _history.value = statsRepository.getSongHistory() }
     }
 
     fun updateEvent(id: Long, songUid: Music.UID, timestamp: Long, listenTimeMs: Long) {

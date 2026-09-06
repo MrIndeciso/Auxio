@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
+ 
 package org.oxycblt.auxio.stats
 
 import androidx.lifecycle.ViewModel
@@ -74,7 +74,8 @@ class StatsViewModel @Inject constructor(private val statsRepository: StatsRepos
                             topAlbums = albumStats.take(10),
                             topArtists = artistStats.take(10),
                             overallStats = overallStats,
-                            dailyStats = dailyStats)
+                            dailyStats = dailyStats,
+                        )
                     }
 
                 _statsData.value = stats
@@ -103,5 +104,5 @@ data class StatsData(
     val topAlbums: List<AlbumStatsInfo>,
     val topArtists: List<ArtistStatsInfo>,
     val overallStats: OverallStats,
-    val dailyStats: List<DailyStatsInfo>
+    val dailyStats: List<DailyStatsInfo>,
 )

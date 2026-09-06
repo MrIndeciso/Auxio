@@ -28,7 +28,10 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import org.oxycblt.musikr.Music
+import org.oxycblt.musikr.migrateMusicUids
 
 /**
  * Allows persistence of all user-created music information.
@@ -37,17 +40,34 @@ import org.oxycblt.musikr.Music
  */
 @Database(
     entities = [PlaylistInfo::class, PlaylistSong::class, PlaylistSongCrossRef::class],
-    version = 30,
-    exportSchema = false)
+    version = 76,
+    exportSchema = false,
+)
 @TypeConverters(Music.UID.TypeConverters::class)
 internal abstract class PlaylistDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
 
     companion object {
+        // Bypass upstream 30 -> 75, whose CONFLICT_REPLACE can discard colliding records.
+        val MIGRATION_30_76 = uidMigration(30)
+        val MIGRATION_75_76 = uidMigration(75)
+
+        private fun uidMigration(from: Int) =
+            object : Migration(from, 76) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    migrateMusicUids(db, "PlaylistInfo", "playlistUid")
+                    migrateMusicUids(db, "PlaylistSong", "songUid")
+                    migrateMusicUids(db, "PlaylistSongCrossRef", "playlistUid", "songUid")
+                }
+            }
+
         fun from(context: Context) =
             Room.databaseBuilder(
-                    context.applicationContext, PlaylistDatabase::class.java, "user_music.db")
-                .fallbackToDestructiveMigration()
+                    context.applicationContext,
+                    PlaylistDatabase::class.java,
+                    "user_music.db",
+                )
+                .addMigrations(MIGRATION_30_76, MIGRATION_75_76)
                 .build()
     }
 }
@@ -83,8 +103,11 @@ internal abstract class PlaylistDao {
         insertRefs(
             rawPlaylist.songs.map {
                 PlaylistSongCrossRef(
-                    playlistUid = rawPlaylist.playlistInfo.playlistUid, songUid = it.songUid)
-            })
+                    playlistUid = rawPlaylist.playlistInfo.playlistUid,
+                    songUid = it.songUid,
+                )
+            }
+        )
     }
 
     /**
@@ -119,7 +142,8 @@ internal abstract class PlaylistDao {
     open suspend fun insertPlaylistSongs(playlistUid: Music.UID, songs: List<PlaylistSong>) {
         insertSongs(songs)
         insertRefs(
-            songs.map { PlaylistSongCrossRef(playlistUid = playlistUid, songUid = it.songUid) })
+            songs.map { PlaylistSongCrossRef(playlistUid = playlistUid, songUid = it.songUid) }
+        )
     }
 
     /**
@@ -134,7 +158,8 @@ internal abstract class PlaylistDao {
         deleteRefs(playlistUid)
         insertSongs(songs)
         insertRefs(
-            songs.map { PlaylistSongCrossRef(playlistUid = playlistUid, songUid = it.songUid) })
+            songs.map { PlaylistSongCrossRef(playlistUid = playlistUid, songUid = it.songUid) }
+        )
     }
 
     /** Internal, do not use. */

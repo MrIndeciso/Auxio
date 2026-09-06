@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
+ 
 package org.oxycblt.auxio.home
 
 import androidx.lifecycle.ViewModel
@@ -50,7 +50,7 @@ class HomeViewModel
 constructor(
     private val listSettings: ListSettings,
     private val playbackSettings: PlaybackSettings,
-    homeGeneratorFactory: HomeGenerator.Factory
+    homeGeneratorFactory: HomeGenerator.Factory,
 ) : ViewModel(), HomeGenerator.Invalidator {
     private val _songList = MutableStateFlow(listOf<Song>())
     /** A list of [Song]s, sorted by the preferred [Sort], to be shown in the home view. */

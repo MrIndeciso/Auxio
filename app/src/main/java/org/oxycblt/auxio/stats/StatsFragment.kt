@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
+ 
 package org.oxycblt.auxio.stats
 
 import android.graphics.drawable.GradientDrawable
@@ -25,6 +25,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.TextView
+import androidx.appcompat.R as AR
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
@@ -32,9 +33,8 @@ import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.appcompat.R as AR
-import com.google.android.material.color.MaterialColors
 import com.google.android.material.R as MR
+import com.google.android.material.color.MaterialColors
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.CalendarMonth
 import com.kizitonwose.calendar.core.DayPosition
@@ -74,13 +74,14 @@ class StatsFragment : Fragment() {
     private var _binding: FragmentStatsBinding? = null
     private val binding
         get() = _binding!!
+
     private val statsViewModel: StatsViewModel by viewModels()
     private lateinit var timePeriodOptions: List<Pair<TimePeriod, String>>
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
-        savedInstanceState: Bundle?
+        savedInstanceState: Bundle?,
     ): View {
         _binding = FragmentStatsBinding.inflate(inflater, container, false)
         return binding.root
@@ -105,13 +106,15 @@ class StatsFragment : Fragment() {
                 TimePeriod.THIS_MONTH to getString(R.string.lbl_this_month),
                 TimePeriod.LAST_MONTH to getString(R.string.lbl_last_month),
                 TimePeriod.THIS_WEEK to getString(R.string.lbl_this_week),
-                TimePeriod.LAST_WEEK to getString(R.string.lbl_last_week))
+                TimePeriod.LAST_WEEK to getString(R.string.lbl_last_week),
+            )
 
         val timePeriodAdapter =
             NoFilterArrayAdapter(
                 requireContext(),
                 android.R.layout.simple_dropdown_item_1line,
-                timePeriodOptions.map { it.second })
+                timePeriodOptions.map { it.second },
+            )
         binding.statsTimePeriodDropdown.setAdapter(timePeriodAdapter)
         binding.statsTimePeriodDropdown.setOnClickListener {
             binding.statsTimePeriodDropdown.showDropDown()
@@ -123,14 +126,17 @@ class StatsFragment : Fragment() {
         }
 
         collectImmediately(statsViewModel.selectedTimePeriod) { period ->
-            val label = timePeriodOptions.firstOrNull { it.first == period }?.second ?: return@collectImmediately
+            val label =
+                timePeriodOptions.firstOrNull { it.first == period }?.second
+                    ?: return@collectImmediately
             if (binding.statsTimePeriodDropdown.text.toString() != label) {
                 binding.statsTimePeriodDropdown.setText(label, false)
             }
         }
 
         binding.viewHistoryButton.setOnClickListener {
-            findNavController().navigateSafe(HomeFragmentDirections.actionHomeFragmentToSongHistoryFragment())
+            findNavController()
+                .navigateSafe(HomeFragmentDirections.actionHomeFragmentToSongHistoryFragment())
         }
 
         binding.statsTopSongsRecycler.apply {
@@ -176,12 +182,13 @@ class StatsFragment : Fragment() {
         binding.statsTotalPlays.text = statsData.overallStats.totalPlayCount.toString()
 
         // Update recycler views
-        (binding.statsTopSongsRecycler.adapter as? SongStatsAdapter)?.submitList(
-            statsData.topSongs)
+        (binding.statsTopSongsRecycler.adapter as? SongStatsAdapter)?.submitList(statsData.topSongs)
         (binding.statsTopAlbumsRecycler.adapter as? AlbumStatsAdapter)?.submitList(
-            statsData.topAlbums)
+            statsData.topAlbums
+        )
         (binding.statsTopArtistsRecycler.adapter as? ArtistStatsAdapter)?.submitList(
-            statsData.topArtists)
+            statsData.topArtists
+        )
 
         // Calendar View
         val dailyStats = statsData.dailyStats
@@ -196,11 +203,11 @@ class StatsFragment : Fragment() {
             val dailyAverageMs = if (totalDays > 0) totalListenTime / totalDays else 0
             val dailyAvgHours = TimeUnit.MILLISECONDS.toHours(dailyAverageMs)
             val dailyAvgMinutes = TimeUnit.MILLISECONDS.toMinutes(dailyAverageMs) % 60
-            binding.statsDailyAverage.text = getString(R.string.fmt_hours_minutes, dailyAvgHours, dailyAvgMinutes)
+            binding.statsDailyAverage.text =
+                getString(R.string.fmt_hours_minutes, dailyAvgHours, dailyAvgMinutes)
 
             val weekFields = WeekFields.of(Locale.getDefault())
-            val weeklyBuckets =
-                dailyStats.groupBy { it.date.with(weekFields.dayOfWeek(), 1) }
+            val weeklyBuckets = dailyStats.groupBy { it.date.with(weekFields.dayOfWeek(), 1) }
             val weeklyAverageMs =
                 weeklyBuckets.values
                     .map { group -> group.sumOf { it.totalListenTimeMs }.toDouble() }
@@ -235,6 +242,7 @@ class StatsFragment : Fragment() {
         calendarView.dayBinder =
             object : MonthDayBinder<DayViewContainer> {
                 override fun create(view: View) = DayViewContainer(view)
+
                 override fun bind(container: DayViewContainer, day: CalendarDay) {
                     container.textView.text = day.date.dayOfMonth.toString()
                     val isCurrentMonth = day.position == DayPosition.MonthDate
@@ -245,35 +253,33 @@ class StatsFragment : Fragment() {
                     val disabledText = com.google.android.material.R.attr.colorOnSurfaceVariant
                     val textColorAttr = if (isCurrentMonth) baseText else disabledText
                     container.textView.setTextColor(
-                        MaterialColors.getColor(container.textView, textColorAttr, 0))
+                        MaterialColors.getColor(container.textView, textColorAttr, 0)
+                    )
 
                     if (hasData) {
                         val intensity =
-                            (statsForDay!!.totalListenTimeMs.toFloat() / maxListenTime)
-                                .coerceIn(0f, 1f)
+                            (statsForDay!!.totalListenTimeMs.toFloat() / maxListenTime).coerceIn(
+                                0f,
+                                1f,
+                            )
                         val activeColor =
-                            MaterialColors.getColor(
-                                container.textView,
-                                AR.attr.colorPrimary,
-                                0)
+                            MaterialColors.getColor(container.textView, AR.attr.colorPrimary, 0)
                         val surfaceColor =
                             MaterialColors.getColor(
                                 container.textView,
                                 MR.attr.colorSurfaceVariant,
-                                0)
+                                0,
+                            )
                         val blended =
-                            ColorUtils.blendARGB(
-                                surfaceColor, activeColor, 0.3f + 0.7f * intensity)
+                            ColorUtils.blendARGB(surfaceColor, activeColor, 0.3f + 0.7f * intensity)
                         container.textView.background =
                             GradientDrawable().apply {
                                 cornerRadius = resources.getDimension(R.dimen.spacing_small)
                                 setColor(blended)
                             }
                         container.textView.setTextColor(
-                            MaterialColors.getColor(
-                                container.textView,
-                                MR.attr.colorOnPrimary,
-                                0))
+                            MaterialColors.getColor(container.textView, MR.attr.colorOnPrimary, 0)
+                        )
                     } else {
                         container.textView.background = null
                     }
@@ -283,10 +289,10 @@ class StatsFragment : Fragment() {
         calendarView.monthHeaderBinder =
             object : MonthHeaderFooterBinder<MonthViewContainer> {
                 override fun create(view: View) = MonthViewContainer(view)
+
                 override fun bind(container: MonthViewContainer, month: CalendarMonth) {
                     val monthName =
-                        month.yearMonth.month.getDisplayName(
-                            TextStyle.SHORT, Locale.getDefault())
+                        month.yearMonth.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())
                     container.textView.text = "$monthName ${month.yearMonth.year}"
                 }
             }
@@ -303,7 +309,7 @@ class StatsFragment : Fragment() {
     private class NoFilterArrayAdapter<T>(
         context: android.content.Context,
         resource: Int,
-        private val items: List<T>
+        private val items: List<T>,
     ) : ArrayAdapter<T>(context, resource, items) {
         override fun getFilter() =
             object : android.widget.Filter() {
@@ -322,8 +328,7 @@ class StatsFragment : Fragment() {
             }
     }
 
-    private inner class SongStatsAdapter :
-        RecyclerView.Adapter<SongStatsAdapter.ViewHolder>() {
+    private inner class SongStatsAdapter : RecyclerView.Adapter<SongStatsAdapter.ViewHolder>() {
         private var items = listOf<SongStatsInfo>()
 
         fun submitList(newItems: List<SongStatsInfo>) {
@@ -348,9 +353,9 @@ class StatsFragment : Fragment() {
             fun bind(info: SongStatsInfo, rank: Int) {
                 binding.statRank.text = rank.toString()
                 binding.statSongName.text = info.song.name.resolve(itemView.context)
-                binding.statSongArtist.text = info.song.artists.joinToString { it.name.resolve(itemView.context) }
-                binding.statPlayCount.text =
-                    getString(R.string.fmt_play_count, info.playCount)
+                binding.statSongArtist.text =
+                    info.song.artists.joinToString { it.name.resolve(itemView.context) }
+                binding.statPlayCount.text = getString(R.string.fmt_play_count, info.playCount)
 
                 val timeMs = info.totalListenTimeMs
                 val hours = timeMs / (1000 * 60 * 60)
@@ -367,8 +372,7 @@ class StatsFragment : Fragment() {
         }
     }
 
-    private inner class AlbumStatsAdapter :
-        RecyclerView.Adapter<AlbumStatsAdapter.ViewHolder>() {
+    private inner class AlbumStatsAdapter : RecyclerView.Adapter<AlbumStatsAdapter.ViewHolder>() {
         private var items = listOf<AlbumStatsInfo>()
 
         fun submitList(newItems: List<AlbumStatsInfo>) {
@@ -393,9 +397,9 @@ class StatsFragment : Fragment() {
             fun bind(info: AlbumStatsInfo, rank: Int) {
                 binding.statRank.text = rank.toString()
                 binding.statAlbumName.text = info.album.name.resolve(itemView.context)
-                binding.statAlbumArtist.text = info.album.artists.joinToString { it.name.resolve(itemView.context) }
-                binding.statPlayCount.text =
-                    getString(R.string.fmt_play_count, info.totalPlayCount)
+                binding.statAlbumArtist.text =
+                    info.album.artists.joinToString { it.name.resolve(itemView.context) }
+                binding.statPlayCount.text = getString(R.string.fmt_play_count, info.totalPlayCount)
 
                 val timeMs = info.totalListenTimeMs
                 val hours = timeMs / (1000 * 60 * 60)
@@ -412,8 +416,7 @@ class StatsFragment : Fragment() {
         }
     }
 
-    private inner class ArtistStatsAdapter :
-        RecyclerView.Adapter<ArtistStatsAdapter.ViewHolder>() {
+    private inner class ArtistStatsAdapter : RecyclerView.Adapter<ArtistStatsAdapter.ViewHolder>() {
         private var items = listOf<ArtistStatsInfo>()
 
         fun submitList(newItems: List<ArtistStatsInfo>) {
@@ -438,8 +441,7 @@ class StatsFragment : Fragment() {
             fun bind(info: ArtistStatsInfo, rank: Int) {
                 binding.statRank.text = rank.toString()
                 binding.statArtistName.text = info.artist.name.resolve(itemView.context)
-                binding.statPlayCount.text =
-                    getString(R.string.fmt_play_count, info.totalPlayCount)
+                binding.statPlayCount.text = getString(R.string.fmt_play_count, info.totalPlayCount)
 
                 val timeMs = info.totalListenTimeMs
                 val hours = timeMs / (1000 * 60 * 60)

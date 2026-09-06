@@ -28,6 +28,7 @@ import javax.inject.Inject
 import org.oxycblt.auxio.home.HomeSettings
 import org.oxycblt.auxio.image.ImageSettings
 import org.oxycblt.auxio.playback.PlaybackSettings
+import org.oxycblt.auxio.search.SearchSettings
 import org.oxycblt.auxio.ui.UISettings
 import org.oxycblt.auxio.util.CopyleftNoticeTree
 import timber.log.Timber
@@ -43,12 +44,15 @@ class Auxio : Application() {
     @Inject lateinit var playbackSettings: PlaybackSettings
     @Inject lateinit var uiSettings: UISettings
     @Inject lateinit var homeSettings: HomeSettings
+    @Inject lateinit var searchSettings: SearchSettings
 
     override fun onCreate() {
         super.onCreate()
         @Suppress("KotlinConstantConditions")
-        if (BuildConfig.APPLICATION_ID != "org.oxycblt.auxio" &&
-            BuildConfig.APPLICATION_ID != "org.oxycblt.auxio.debug") {
+        if (
+            BuildConfig.APPLICATION_ID != "org.oxycblt.auxio" &&
+                BuildConfig.APPLICATION_ID != "org.oxycblt.auxio.debug"
+        ) {
             Timber.plant(CopyleftNoticeTree())
         } else if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
@@ -59,6 +63,7 @@ class Auxio : Application() {
         playbackSettings.migrate()
         uiSettings.migrate()
         homeSettings.migrate()
+        searchSettings.migrate()
         // Adding static shortcuts in a dynamic manner is better than declaring them
         // manually, as it will properly handle the difference between debug and release
         // Auxio instances.
@@ -72,8 +77,11 @@ class Auxio : Application() {
                     .setIcon(IconCompat.createWithResource(this, R.drawable.ic_shortcut_shuffle_24))
                     .setIntent(
                         Intent(this, MainActivity::class.java)
-                            .setAction(INTENT_KEY_SHORTCUT_SHUFFLE))
-                    .build()))
+                            .setAction(INTENT_KEY_SHORTCUT_SHUFFLE)
+                    )
+                    .build()
+            ),
+        )
     }
 
     companion object {

@@ -27,14 +27,17 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import org.oxycblt.musikr.Music
+import org.oxycblt.musikr.migrateMusicUids
 
 /**
  * Provides raw access to the database storing music listening statistics.
  *
  * @author Auxio Project
  */
-@Database(entities = [SongStats::class, PlayEvent::class], version = 2, exportSchema = false)
+@Database(entities = [SongStats::class, PlayEvent::class], version = 3, exportSchema = false)
 @TypeConverters(Music.UID.TypeConverters::class)
 abstract class StatsDatabase : RoomDatabase() {
     /**
@@ -43,6 +46,16 @@ abstract class StatsDatabase : RoomDatabase() {
      * @return A [StatsDao] providing control of the database's stats tables.
      */
     abstract fun statsDao(): StatsDao
+
+    companion object {
+        val MIGRATION_2_3 =
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    migrateMusicUids(db, "SongStats", "songUid")
+                    migrateMusicUids(db, "PlayEvent", "songUid")
+                }
+            }
+    }
 }
 
 /**
@@ -100,11 +113,12 @@ interface StatsDao {
      * @return List of [PlayEvent]s for the song within the time range.
      */
     @Query(
-        "SELECT * FROM PlayEvent WHERE songUid = :songUid AND timestamp >= :startTimestamp AND timestamp <= :endTimestamp ORDER BY timestamp DESC")
+        "SELECT * FROM PlayEvent WHERE songUid = :songUid AND timestamp >= :startTimestamp AND timestamp <= :endTimestamp ORDER BY timestamp DESC"
+    )
     suspend fun getPlayEvents(
         songUid: Music.UID,
         startTimestamp: Long,
-        endTimestamp: Long
+        endTimestamp: Long,
     ): List<PlayEvent>
 
     /**
@@ -115,7 +129,8 @@ interface StatsDao {
      * @return List of all [PlayEvent]s within the time range.
      */
     @Query(
-        "SELECT * FROM PlayEvent WHERE timestamp >= :startTimestamp AND timestamp <= :endTimestamp ORDER BY timestamp DESC")
+        "SELECT * FROM PlayEvent WHERE timestamp >= :startTimestamp AND timestamp <= :endTimestamp ORDER BY timestamp DESC"
+    )
     suspend fun getAllPlayEvents(startTimestamp: Long, endTimestamp: Long): List<PlayEvent>
 
     /**
@@ -147,7 +162,8 @@ interface StatsDao {
      *
      * @param stats The [SongStats] to insert or update.
      */
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertOrUpdateStats(stats: SongStats)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdateStats(stats: SongStats)
 
     /**
      * Delete stats for a song.
@@ -165,7 +181,8 @@ interface StatsDao {
      * @param listenTimeMs The new listen duration.
      */
     @Query(
-        "UPDATE PlayEvent SET timestamp = :timestamp, listenTimeMs = :listenTimeMs WHERE id = :id")
+        "UPDATE PlayEvent SET timestamp = :timestamp, listenTimeMs = :listenTimeMs WHERE id = :id"
+    )
     suspend fun updatePlayEvent(id: Long, timestamp: Long, listenTimeMs: Long)
 
     /**
@@ -192,7 +209,7 @@ data class SongStats(
     @PrimaryKey val songUid: Music.UID,
     val playCount: Long,
     val totalListenTimeMs: Long,
-    val lastPlayedTimestamp: Long
+    val lastPlayedTimestamp: Long,
 )
 
 /**
@@ -208,5 +225,5 @@ data class PlayEvent(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val songUid: Music.UID,
     val timestamp: Long,
-    val listenTimeMs: Long
+    val listenTimeMs: Long,
 )

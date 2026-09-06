@@ -41,7 +41,7 @@ class StatsRoomModule {
     @Provides
     fun database(@ApplicationContext context: Context) =
         Room.databaseBuilder(context.applicationContext, StatsDatabase::class.java, "stats.db")
-            .fallbackToDestructiveMigration()
+            .addMigrations(StatsDatabase.MIGRATION_2_3)
             .build()
 
     @Provides fun statsDao(database: StatsDatabase) = database.statsDao()

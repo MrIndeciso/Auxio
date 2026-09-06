@@ -43,6 +43,7 @@ interface HomeSettings : Settings<HomeSettings.Listener> {
     interface Listener {
         /** Called when the [homeTabs] configuration changes. */
         fun onTabsChanged() {}
+
         /** Called when the [shouldHideCollaborators] configuration changes. */
         fun onHideCollaboratorsChanged() {}
     }
@@ -52,10 +53,13 @@ class HomeSettingsImpl @Inject constructor(@ApplicationContext context: Context)
     Settings.Impl<HomeSettings.Listener>(context), HomeSettings {
     override var homeTabs: Array<Tab>
         get() {
-            var tabs = Tab.fromIntCode(
-                sharedPreferences.getInt(
-                    getString(R.string.set_key_home_tabs), Tab.SEQUENCE_DEFAULT))
-                ?: unlikelyToBeNull(Tab.fromIntCode(Tab.SEQUENCE_DEFAULT))
+            var tabs =
+                Tab.fromIntCode(
+                    sharedPreferences.getInt(
+                        getString(R.string.set_key_home_tabs),
+                        Tab.SEQUENCE_DEFAULT,
+                    )
+                ) ?: unlikelyToBeNull(Tab.fromIntCode(Tab.SEQUENCE_DEFAULT))
             if (tabs.none { it.type == MusicType.STATS }) {
                 tabs += Tab.Invisible(MusicType.STATS)
             }

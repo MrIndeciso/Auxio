@@ -21,7 +21,6 @@ package org.oxycblt.auxio.stats
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.oxycblt.auxio.playback.state.PlaybackStateManager
@@ -40,7 +39,7 @@ class StatsTracker
 @Inject
 constructor(
     private val playbackManager: PlaybackStateManager,
-    private val statsRepository: StatsRepository
+    private val statsRepository: StatsRepository,
 ) : PlaybackStateManager.Listener {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var currentSong: Song? = null
@@ -80,7 +79,7 @@ constructor(
         parent: MusicParent?,
         queue: List<Song>,
         index: Int,
-        isShuffled: Boolean
+        isShuffled: Boolean,
     ) {
         // New playback started
         recordCurrentSession()

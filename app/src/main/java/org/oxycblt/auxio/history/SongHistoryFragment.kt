@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
+ 
 package org.oxycblt.auxio.history
 
 import android.os.Bundle
@@ -38,28 +38,26 @@ import org.oxycblt.auxio.databinding.FragmentSongHistoryBinding
 import org.oxycblt.auxio.music.MusicRepository
 import org.oxycblt.auxio.stats.PlayEvent
 import org.oxycblt.auxio.util.collectImmediately
-import org.oxycblt.auxio.util.systemBarInsetsCompat
 import org.oxycblt.auxio.util.showToast
+import org.oxycblt.auxio.util.systemBarInsetsCompat
 
-/**
- * A fragment to display the history of played songs.
- */
+/** A fragment to display the history of played songs. */
 @AndroidEntryPoint
 class SongHistoryFragment : Fragment() {
     private var _binding: FragmentSongHistoryBinding? = null
-    private val binding get() = _binding!!
+    private val binding
+        get() = _binding!!
 
     private val viewModel: SongHistoryViewModel by viewModels()
 
-    @Inject
-    lateinit var musicRepository: MusicRepository
+    @Inject lateinit var musicRepository: MusicRepository
     private val dateFormat =
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).apply { isLenient = false }
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
-        savedInstanceState: Bundle?
+        savedInstanceState: Bundle?,
     ): View {
         _binding = FragmentSongHistoryBinding.inflate(inflater, container, false)
         return binding.root
@@ -72,7 +70,8 @@ class SongHistoryFragment : Fragment() {
             val extra = resources.getDimensionPixelSize(R.dimen.spacing_medium)
             v.updatePadding(
                 top = insets.systemBarInsetsCompat.top + extra,
-                bottom = insets.systemBarInsetsCompat.bottom + extra)
+                bottom = insets.systemBarInsetsCompat.bottom + extra,
+            )
             insets
         }
 
@@ -82,9 +81,7 @@ class SongHistoryFragment : Fragment() {
             adapter = historyAdapter
         }
 
-        collectImmediately(viewModel.history) { history ->
-            historyAdapter.submitList(history)
-        }
+        collectImmediately(viewModel.history) { history -> historyAdapter.submitList(history) }
     }
 
     override fun onDestroyView() {
@@ -98,7 +95,7 @@ class SongHistoryFragment : Fragment() {
             .setItems(
                 arrayOf(
                     getString(R.string.lbl_edit_history_entry),
-                    getString(R.string.lbl_delete_history_entry)
+                    getString(R.string.lbl_delete_history_entry),
                 )
             ) { _, which ->
                 when (which) {

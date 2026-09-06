@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
+ 
 package org.oxycblt.auxio.home
 
 import android.annotation.SuppressLint
@@ -27,21 +27,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.MenuCompat
 import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
-import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.fragment.findNavController
-import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import com.google.android.material.transition.MaterialSharedAxis
 import dagger.hilt.android.AndroidEntryPoint
-import java.lang.reflect.Field
-import kotlin.math.abs
 import org.oxycblt.auxio.R
 import org.oxycblt.auxio.databinding.FragmentHomeBinding
 import org.oxycblt.auxio.detail.DetailViewModel
@@ -64,9 +60,10 @@ import org.oxycblt.auxio.music.PlaylistMessage
 import org.oxycblt.auxio.playback.PlaybackDecision
 import org.oxycblt.auxio.playback.PlaybackViewModel
 import org.oxycblt.auxio.stats.StatsFragment
+import org.oxycblt.auxio.ui.FadingToolbarOffsetListener
 import org.oxycblt.auxio.util.collect
 import org.oxycblt.auxio.util.collectImmediately
-import org.oxycblt.auxio.util.lazyReflectedField
+import org.oxycblt.auxio.util.dampen
 import org.oxycblt.auxio.util.navigateSafe
 import org.oxycblt.auxio.util.showToast
 import org.oxycblt.musikr.IndexingProgress
@@ -82,8 +79,7 @@ import timber.log.Timber as L
  * @author Alexander Capehart (OxygenCobalt)
  */
 @AndroidEntryPoint
-class HomeFragment :
-    SelectionFragment<FragmentHomeBinding>(), AppBarLayout.OnOffsetChangedListener {
+class HomeFragment : SelectionFragment<FragmentHomeBinding>() {
     override val listModel: ListViewModel by activityViewModels()
     override val musicModel: MusicViewModel by activityViewModels()
     override val playbackModel: PlaybackViewModel by activityViewModels()
@@ -129,7 +125,9 @@ class HomeFragment :
 
         // --- UI SETUP ---
 
-        binding.homeAppbar.addOnOffsetChangedListener(this)
+        binding.homeAppbar.addOnOffsetChangedListener(
+            FadingToolbarOffsetListener(binding.homeToolbar, binding.homeContent)
+        )
         binding.homeNormalToolbar.apply {
             setOnMenuItemClickListener(this@HomeFragment)
             MenuCompat.setGroupDividerEnabled(menu, true)
@@ -144,7 +142,8 @@ class HomeFragment :
                     override fun onPageSelected(position: Int) {
                         homeModel.synchronizeTabPosition(position)
                     }
-                })
+                }
+            )
 
             // ViewPager2 will nominally consume window insets, which will then break the window
             // insets applied to the indexing view before API 30. Fix this by overriding the
@@ -157,14 +156,7 @@ class HomeFragment :
             // debug UI performance.
             offscreenPageLimit = Tab.MAX_SEQUENCE_IDX + 1
 
-            // By default, ViewPager2's sensitivity is high enough to result in vertical scroll
-            // events being registered as horizontal scroll events. Reflect into the internal
-            // RecyclerView and change the touch slope so that touch actions will act more as a
-            // scroll than as a swipe. Derived from:
-            // https://al-e-shevelev.medium.com/how-to-reduce-scroll-sensitivity-of-viewpager2-widget-87797ad02414
-            val recycler = VP_RECYCLER_FIELD.get(this@apply)
-            val slop = RV_TOUCH_SLOP_FIELD.get(recycler) as Int
-            RV_TOUCH_SLOP_FIELD.set(recycler, slop * 3)
+            dampen()
         }
 
         // Further initialization must be done in the function that also handles
@@ -187,19 +179,7 @@ class HomeFragment :
     override fun onDestroyBinding(binding: FragmentHomeBinding) {
         super.onDestroyBinding(binding)
         storagePermissionLauncher = null
-        binding.homeAppbar.removeOnOffsetChangedListener(this)
         binding.homeNormalToolbar.setOnMenuItemClickListener(null)
-    }
-
-    override fun onOffsetChanged(appBarLayout: AppBarLayout, verticalOffset: Int) {
-        val binding = requireBinding()
-        val range = appBarLayout.totalScrollRange
-        // Fade out the toolbar as the AppBarLayout collapses. To prevent status bar overlap,
-        // the alpha transition is shifted such that the Toolbar becomes fully transparent
-        // when the AppBarLayout is only at half-collapsed.
-        binding.homeToolbar.alpha = 1f - (abs(verticalOffset.toFloat()) / (range.toFloat() / 2))
-        binding.homeContent.updatePadding(
-            bottom = binding.homeAppbar.totalScrollRange + verticalOffset)
     }
 
     override fun onMenuItemClick(item: MenuItem): Boolean {
@@ -268,7 +248,10 @@ class HomeFragment :
 
         // Set up the mapping between the ViewPager and TabLayout.
         TabLayoutMediator(
-                binding.homeTabs, binding.homePager, NamedTabStrategy(homeModel.currentTabTypes))
+                binding.homeTabs,
+                binding.homePager,
+                NamedTabStrategy(homeModel.currentTabTypes),
+            )
             .attach()
     }
 
@@ -356,7 +339,8 @@ class HomeFragment :
                     HomeFragmentDirections.newPlaylist(
                         decision.songs.map { it.uid }.toTypedArray(),
                         decision.template,
-                        decision.reason)
+                        decision.reason,
+                    )
                 }
                 is PlaylistDecision.Import -> {
                     L.d("Importing playlist")
@@ -374,7 +358,8 @@ class HomeFragment :
                         decision.playlist.uid,
                         decision.template,
                         decision.applySongs.map { it.uid }.toTypedArray(),
-                        decision.reason)
+                        decision.reason,
+                    )
                 }
                 is PlaylistDecision.Export -> {
                     L.d("Exporting ${decision.playlist}")
@@ -387,7 +372,8 @@ class HomeFragment :
                 is PlaylistDecision.Add -> {
                     L.d("Adding ${decision.songs.size} to a playlist")
                     HomeFragmentDirections.addToPlaylist(
-                        decision.songs.map { it.uid }.toTypedArray())
+                        decision.songs.map { it.uid }.toTypedArray()
+                    )
                 }
             }
         findNavController().navigateSafe(directions)
@@ -494,7 +480,7 @@ class HomeFragment :
     private class HomePagerAdapter(
         private val tabs: List<MusicType>,
         fragmentManager: FragmentManager,
-        lifecycleOwner: LifecycleOwner
+        lifecycleOwner: LifecycleOwner,
     ) : FragmentStateAdapter(fragmentManager, lifecycleOwner.lifecycle) {
         override fun getItemCount() = tabs.size
 
@@ -507,10 +493,5 @@ class HomeFragment :
                 MusicType.PLAYLISTS -> PlaylistListFragment()
                 MusicType.STATS -> StatsFragment()
             }
-    }
-
-    private companion object {
-        val VP_RECYCLER_FIELD: Field by lazyReflectedField(ViewPager2::class, "mRecyclerView")
-        val RV_TOUCH_SLOP_FIELD: Field by lazyReflectedField(RecyclerView::class, "mTouchSlop")
     }
 }

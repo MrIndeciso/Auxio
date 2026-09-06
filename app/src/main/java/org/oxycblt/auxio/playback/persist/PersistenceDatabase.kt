@@ -28,8 +28,10 @@ import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import org.oxycblt.auxio.playback.state.RepeatMode
 import org.oxycblt.musikr.Music
+import org.oxycblt.musikr.migrateMusicUids
 
 /**
  * Provides raw access to the database storing the persisted playback state.
@@ -38,8 +40,9 @@ import org.oxycblt.musikr.Music
  */
 @Database(
     entities = [PlaybackState::class, QueueHeapItem::class, QueueShuffledMappingItem::class],
-    version = 38,
-    exportSchema = false)
+    version = 39,
+    exportSchema = false,
+)
 @TypeConverters(Music.UID.TypeConverters::class)
 abstract class PersistenceDatabase : RoomDatabase() {
     /**
@@ -57,6 +60,14 @@ abstract class PersistenceDatabase : RoomDatabase() {
     abstract fun queueDao(): QueueDao
 
     companion object {
+        val MIGRATION_38_39 =
+            object : Migration(38, 39) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    migrateMusicUids(db, "PlaybackState", "songUid", "parentUid")
+                    migrateMusicUids(db, "QueueHeapItem", "uid")
+                }
+            }
+
         val MIGRATION_27_32 =
             Migration(27, 32) {
                 // Switched from custom names to just letting room pick the names
@@ -144,7 +155,7 @@ data class PlaybackState(
     val positionMs: Long,
     val repeatMode: RepeatMode,
     val songUid: Music.UID,
-    val parentUid: Music.UID?
+    val parentUid: Music.UID?,
 )
 
 @Entity data class QueueHeapItem(@PrimaryKey val id: Int, val uid: Music.UID)
