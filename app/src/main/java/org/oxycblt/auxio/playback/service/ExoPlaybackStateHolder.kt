@@ -76,12 +76,14 @@ class ExoPlaybackStateHolder(
     private val replayGainProcessor: ReplayGainAudioProcessor,
     private val musicRepository: MusicRepository,
     private val imageSettings: ImageSettings,
+    sessionRecorder: org.oxycblt.auxio.stats.ListeningSessionRecorder,
 ) :
     PlaybackStateHolder,
     Player.Listener,
     MusicRepository.UpdateListener,
     PlaybackSettings.Listener,
     ImageSettings.Listener {
+    private val statsTracker = org.oxycblt.auxio.stats.StatsTracker(sessionRecorder, player)
     private val saveJob = Job()
     private val saveScope = CoroutineScope(Dispatchers.IO + saveJob)
     private val restoreScope = CoroutineScope(Dispatchers.IO + saveJob)
@@ -92,6 +94,7 @@ class ExoPlaybackStateHolder(
         private set
 
     fun attach() {
+        statsTracker.attach()
         playbackManager.registerStateHolder(this)
         musicRepository.addUpdateListener(this)
         player.addListener(this)
@@ -101,6 +104,7 @@ class ExoPlaybackStateHolder(
     }
 
     fun release() {
+        statsTracker.release()
         saveJob.cancel()
         playbackManager.unregisterStateHolder(this)
         musicRepository.removeUpdateListener(this)
@@ -246,6 +250,7 @@ class ExoPlaybackStateHolder(
     }
 
     override fun newPlayback(command: PlaybackCommand) {
+        statsTracker.beginChange()
         parent = command.parent
         player.shuffleModeEnabled = command.shuffled
         player.setMediaItems(command.queue.map { it.buildMediaItem() })
@@ -260,6 +265,7 @@ class ExoPlaybackStateHolder(
         player.seekTo(target, C.TIME_UNSET)
         player.prepare()
         player.play()
+        statsTracker.endChange()
         playbackManager.ack(this, StateAck.NewPlayback)
         deferSave()
     }
@@ -277,6 +283,7 @@ class ExoPlaybackStateHolder(
     }
 
     override fun next() {
+        statsTracker.beginChange()
         // Replicate the old pseudo-circular queue behavior when no repeat option is implemented.
         // Basically, you can't skip back and wrap around the queue, but you can skip forward and
         // wrap around the queue, albeit playback will be paused.
@@ -296,6 +303,7 @@ class ExoPlaybackStateHolder(
                 player.pause()
             }
         }
+        statsTracker.endChange()
         playbackManager.ack(this, StateAck.IndexMoved)
         deferSave()
     }
@@ -322,10 +330,12 @@ class ExoPlaybackStateHolder(
         }
 
         val trueIndex = indices[index]
+        statsTracker.beginChange()
         player.seekTo(trueIndex, C.TIME_UNSET) // Handles remaining custom logic
         if (!playbackSettings.rememberPause) {
             player.play()
         }
+        statsTracker.endChange()
         playbackManager.ack(this, StateAck.IndexMoved)
         deferSave()
     }
@@ -405,6 +415,7 @@ class ExoPlaybackStateHolder(
         repeatMode: RepeatMode,
         ack: StateAck.NewPlayback?,
     ) {
+        statsTracker.beginChange()
         var sendNewPlaybackEvent = false
         var shouldSeek = false
         if (this.parent != parent) {
@@ -437,6 +448,7 @@ class ExoPlaybackStateHolder(
             player.seekTo(positionMs)
         }
 
+        statsTracker.endChange(restore = true)
         if (sendNewPlaybackEvent) {
             ack?.let { playbackManager.ack(this, it) }
         }
@@ -653,6 +665,7 @@ class ExoPlaybackStateHolder(
         private val replayGainProcessor: ReplayGainAudioProcessor,
         private val musicRepository: MusicRepository,
         private val imageSettings: ImageSettings,
+        private val sessionRecorder: org.oxycblt.auxio.stats.ListeningSessionRecorder,
     ) {
         fun create(): ExoPlaybackStateHolder {
             // Since Auxio is a music player, only specify an audio renderer to save
@@ -697,6 +710,7 @@ class ExoPlaybackStateHolder(
                 replayGainProcessor,
                 musicRepository,
                 imageSettings,
+                sessionRecorder,
             )
         }
     }

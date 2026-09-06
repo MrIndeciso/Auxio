@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Auxio Project
+ * Copyright (c) 2026 Auxio Project
  * StatsFragment.kt is part of Auxio.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -18,443 +18,417 @@
  
 package org.oxycblt.auxio.stats
 
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
 import android.widget.TextView
-import androidx.appcompat.R as AR
-import androidx.core.graphics.ColorUtils
+import androidx.core.os.bundleOf
+import androidx.core.view.isVisible
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
+import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ConcatAdapter
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.R as MR
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.color.MaterialColors
+import com.google.android.material.datepicker.MaterialDatePicker
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.kizitonwose.calendar.core.CalendarDay
-import com.kizitonwose.calendar.core.CalendarMonth
 import com.kizitonwose.calendar.core.DayPosition
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
-import com.kizitonwose.calendar.view.CalendarView
 import com.kizitonwose.calendar.view.MonthDayBinder
-import com.kizitonwose.calendar.view.MonthHeaderFooterBinder
 import com.kizitonwose.calendar.view.ViewContainer
 import dagger.hilt.android.AndroidEntryPoint
+import java.time.Instant
 import java.time.YearMonth
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
-import java.time.temporal.ChronoUnit
-import java.time.temporal.WeekFields
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import org.oxycblt.auxio.R
 import org.oxycblt.auxio.databinding.FragmentStatsBinding
-import org.oxycblt.auxio.databinding.ItemCalendarDayBinding
-import org.oxycblt.auxio.databinding.ItemCalendarHeaderBinding
-import org.oxycblt.auxio.databinding.ItemStatAlbumBinding
-import org.oxycblt.auxio.databinding.ItemStatArtistBinding
-import org.oxycblt.auxio.databinding.ItemStatSongBinding
-import org.oxycblt.auxio.home.HomeFragmentDirections
+import org.oxycblt.auxio.databinding.ItemStatsDashboardBinding
+import org.oxycblt.auxio.databinding.ItemStatsRankingBinding
 import org.oxycblt.auxio.music.resolve
 import org.oxycblt.auxio.util.collectImmediately
-import org.oxycblt.auxio.util.navigateSafe
 import org.oxycblt.auxio.util.systemBarInsetsCompat
-import timber.log.Timber as L
+import org.oxycblt.musikr.Album
+import org.oxycblt.musikr.Artist
+import org.oxycblt.musikr.Song
 
-/**
- * Fragment that displays listening statistics.
- *
- * @author Auxio Project
- */
+/** One RecyclerView owns dashboard, calendar and ranking scrolling. */
 @AndroidEntryPoint
 class StatsFragment : Fragment() {
-    private var _binding: FragmentStatsBinding? = null
-    private val binding
-        get() = _binding!!
-
-    private val statsViewModel: StatsViewModel by viewModels()
-    private lateinit var timePeriodOptions: List<Pair<TimePeriod, String>>
+    private var binding: FragmentStatsBinding? = null
+    private val model: StatsViewModel by activityViewModels()
+    private val all: Boolean
+        get() = arguments?.getBoolean("allRankings") == true
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?,
-    ): View {
-        _binding = FragmentStatsBinding.inflate(inflater, container, false)
-        return binding.root
-    }
+    ): View = FragmentStatsBinding.inflate(inflater, container, false).also { binding = it }.root
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-
-        binding.root.setOnApplyWindowInsetsListener { v, insets ->
-            val extraBottom = resources.getDimensionPixelSize(R.dimen.spacing_medium)
-            v.updatePadding(bottom = insets.systemBarInsetsCompat.bottom + extraBottom)
+        val recycler = binding!!.statsRecycler
+        val header = ItemStatsDashboardBinding.inflate(layoutInflater, recycler, false)
+        val rankings = RankingAdapter { entry ->
+            val (destination, key) =
+                when (entry.music) {
+                    is Song -> R.id.song_detail_dialog to "songUid"
+                    is Album -> R.id.album_detail_fragment to "albumUid"
+                    else -> R.id.artist_detail_fragment to "artistUid"
+                }
+            findNavController().navigate(destination, bundleOf(key to entry.music.uid))
+        }
+        val more =
+            MaterialButton(requireContext()).apply {
+                setText(R.string.stats_see_all)
+                minHeight = (48 * resources.displayMetrics.density).toInt()
+                setOnClickListener { findNavController().navigate(R.id.statsRankingFragment) }
+            }
+        recycler.adapter =
+            ConcatAdapter(SingleViewAdapter(header.root), rankings, SingleViewAdapter(more))
+        recycler.setOnApplyWindowInsetsListener { v, insets ->
+            v.updatePadding(bottom = insets.systemBarInsetsCompat.bottom)
             insets
         }
-
-        // Setup time period selector
-        timePeriodOptions =
+        androidx.core.view.ViewCompat.setAccessibilityHeading(header.month, true)
+        header.summary.isVisible = !all
+        header.calendarSection.isVisible = !all
+        val periods = TimePeriod.entries
+        val labels =
             listOf(
-                TimePeriod.ALL_TIME to getString(R.string.lbl_all_time),
-                TimePeriod.THIS_YEAR to getString(R.string.lbl_this_year),
-                TimePeriod.LAST_YEAR to getString(R.string.lbl_last_year),
-                TimePeriod.LAST_12_MONTHS to getString(R.string.lbl_last_12_months),
-                TimePeriod.THIS_MONTH to getString(R.string.lbl_this_month),
-                TimePeriod.LAST_MONTH to getString(R.string.lbl_last_month),
-                TimePeriod.THIS_WEEK to getString(R.string.lbl_this_week),
-                TimePeriod.LAST_WEEK to getString(R.string.lbl_last_week),
+                R.string.lbl_all_time,
+                R.string.stats_today,
+                R.string.lbl_this_year,
+                R.string.lbl_last_year,
+                R.string.lbl_last_12_months,
+                R.string.lbl_this_month,
+                R.string.lbl_last_month,
+                R.string.lbl_this_week,
+                R.string.lbl_last_week,
+                R.string.stats_custom,
             )
-
-        val timePeriodAdapter =
-            NoFilterArrayAdapter(
-                requireContext(),
-                android.R.layout.simple_dropdown_item_1line,
-                timePeriodOptions.map { it.second },
+        header.period.setOnClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.lbl_stats)
+                .setSingleChoiceItems(
+                    labels.map { getString(it) }.toTypedArray(),
+                    periods.indexOf(TimePeriod.valueOf(model.period.value)),
+                ) { dialog, which ->
+                    dialog.dismiss()
+                    if (periods[which] == TimePeriod.CUSTOM) {
+                        val picker = MaterialDatePicker.Builder.dateRangePicker().build()
+                        picker.addOnPositiveButtonClickListener { selection ->
+                            model.selectRange(
+                                Instant.ofEpochMilli(selection.first)
+                                    .atZone(ZoneOffset.UTC)
+                                    .toLocalDate(),
+                                Instant.ofEpochMilli(selection.second)
+                                    .atZone(ZoneOffset.UTC)
+                                    .toLocalDate(),
+                            )
+                        }
+                        picker.show(parentFragmentManager, "stats-date-range")
+                    } else model.selectPeriod(periods[which])
+                }
+                .show()
+        }
+        val categories = listOf(R.string.lbl_songs, R.string.lbl_albums, R.string.lbl_artists)
+        header.category.setOnClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setSingleChoiceItems(
+                    categories.map { getString(it) }.toTypedArray(),
+                    RankingCategory.valueOf(model.category.value).ordinal,
+                ) { dialog, which ->
+                    model.selectCategory(RankingCategory.entries[which])
+                    dialog.dismiss()
+                }
+                .show()
+        }
+        header.byPlays.setOnCheckedChangeListener { _, checked -> model.sortByPlays(checked) }
+        header.history.setOnClickListener { history(model.state.value.range) }
+        header.unavailable.setOnClickListener {
+            history(model.state.value.range, unavailable = true)
+        }
+        header.retry.setOnClickListener { model.retry() }
+        val firstWeekday = firstDayOfWeekFromLocale()
+        repeat(7) { index ->
+            header.weekdays.addView(
+                TextView(requireContext()).apply {
+                    text =
+                        firstWeekday
+                            .plus(index.toLong())
+                            .getDisplayName(TextStyle.NARROW, Locale.getDefault())
+                    gravity = android.view.Gravity.CENTER
+                    layoutParams =
+                        android.widget.LinearLayout.LayoutParams(
+                            0,
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                            1f,
+                        )
+                }
             )
-        binding.statsTimePeriodDropdown.setAdapter(timePeriodAdapter)
-        binding.statsTimePeriodDropdown.setOnClickListener {
-            binding.statsTimePeriodDropdown.showDropDown()
         }
+        header.calendar.dayBinder =
+            object : MonthDayBinder<DayContainer> {
+                override fun create(view: View) = DayContainer(view)
 
-        // Handle selection changes
-        binding.statsTimePeriodDropdown.setOnItemClickListener { _, _, position, _ ->
-            statsViewModel.setTimePeriod(timePeriodOptions[position].first)
+                override fun bind(container: DayContainer, day: CalendarDay) {
+                    val text = container.view as TextView
+                    val current = day.position == DayPosition.MonthDate
+                    val duration = model.state.value.daily[day.date] ?: 0
+                    text.text = if (current) day.date.dayOfMonth.toString() else ""
+                    text.isClickable = current
+                    text.isFocusable = current
+                    text.contentDescription =
+                        getString(
+                            R.string.stats_day,
+                            day.date.format(
+                                DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.FULL)
+                            ),
+                            formatStatsDuration(duration),
+                        )
+                    text.setTextColor(
+                        MaterialColors.getColor(
+                            text,
+                            if (duration > 0 && current)
+                                com.google.android.material.R.attr.colorOnPrimaryContainer
+                            else com.google.android.material.R.attr.colorOnSurface,
+                        )
+                    )
+                    text.setBackgroundColor(
+                        MaterialColors.getColor(
+                            text,
+                            if (duration > 0 && current)
+                                com.google.android.material.R.attr.colorPrimaryContainer
+                            else com.google.android.material.R.attr.colorSurface,
+                        )
+                    )
+                    text.setOnClickListener {
+                        if (current) history(StatsDateRange(day.date, day.date.plusDays(1)))
+                    }
+                    text.isClickable = current
+                    text.importantForAccessibility =
+                        if (current) View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                        else View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }
+            }
+        header.calendar.daySize = com.kizitonwose.calendar.view.DaySize.SeventhWidth
+        header.calendar.setup(YearMonth.of(1900, 1), YearMonth.of(2200, 12), firstWeekday)
+        header.calendar.scrollToMonth(YearMonth.parse(model.month.value))
+        header.calendar.monthScrollListener = { model.showMonth(it.yearMonth) }
+        header.previousMonth.setOnClickListener {
+            model.showMonth(
+                YearMonth.parse(model.month.value)
+                    .minusMonths(1)
+                    .coerceAtLeast(YearMonth.of(1900, 1))
+            )
         }
-
-        collectImmediately(statsViewModel.selectedTimePeriod) { period ->
-            val label =
-                timePeriodOptions.firstOrNull { it.first == period }?.second
-                    ?: return@collectImmediately
-            if (binding.statsTimePeriodDropdown.text.toString() != label) {
-                binding.statsTimePeriodDropdown.setText(label, false)
+        header.nextMonth.setOnClickListener {
+            model.showMonth(
+                YearMonth.parse(model.month.value)
+                    .plusMonths(1)
+                    .coerceAtMost(YearMonth.of(2200, 12))
+            )
+        }
+        collectImmediately(model.month) {
+            val month = YearMonth.parse(it)
+            header.month.text = month.format(DateTimeFormatter.ofPattern("MMMM yyyy"))
+            if (header.calendar.findFirstVisibleMonth()?.yearMonth != month)
+                header.calendar.scrollToMonth(month)
+        }
+        var restored = false
+        collectImmediately(
+            combine(
+                    model.state,
+                    model.category,
+                    model.byPlays,
+                    model.period,
+                    model.recordingError,
+                ) { state, category, plays, period, recordingError ->
+                    DashboardRender(
+                        state,
+                        RankingCategory.valueOf(category),
+                        plays,
+                        period,
+                        recordingError,
+                    )
+                }
+                .stateIn(
+                    viewLifecycleOwner.lifecycleScope,
+                    SharingStarted.Eagerly,
+                    DashboardRender(
+                        model.state.value,
+                        RankingCategory.valueOf(model.category.value),
+                        model.byPlays.value,
+                        model.period.value,
+                        model.recordingError.value,
+                    ),
+                )
+        ) { render ->
+            val state = render.state
+            val entries = state.ranking(render.category, render.plays)
+            header.category.setText(categories[render.category.ordinal])
+            header.byPlays.isChecked = render.plays
+            header.period.text =
+                if (render.period == TimePeriod.CUSTOM.name)
+                    "${state.range.first} – ${state.range.endExclusive?.minusDays(1)}"
+                else getString(labels[periods.indexOf(TimePeriod.valueOf(render.period))])
+            header.totalTime.text = formatStatsDuration(state.total.totalListenTimeMs)
+            header.totalPlays.text = getString(R.string.fmt_play_count, state.total.totalPlayCount)
+            header.average.text =
+                getString(
+                    R.string.stats_average,
+                    formatStatsDuration(state.total.totalListenTimeMs / state.days),
+                    formatStatsDuration(
+                        (state.total.totalListenTimeMs.toDouble() * 7 / state.days).toLong()
+                    ),
+                )
+            header.unavailable.isVisible = state.unavailable.totalPlayCount > 0
+            header.unavailable.text =
+                getString(
+                    R.string.stats_unavailable,
+                    state.unavailable.totalPlayCount,
+                    formatStatsDuration(state.unavailable.totalListenTimeMs),
+                )
+            header.loading.isVisible = state.loading
+            val messages = buildList {
+                state.error?.let { add(it) }
+                render.recordingError?.let { add(it) }
+                if (!state.loading && state.total.totalPlayCount == 0L)
+                    add(getString(R.string.stats_empty))
+                else if (!state.loading && entries.isEmpty())
+                    add(getString(R.string.stats_empty_ranking))
+                if (state.inconsistentSongs > 0)
+                    add(
+                        resources.getQuantityString(
+                            R.plurals.stats_inconsistent,
+                            state.inconsistentSongs,
+                            state.inconsistentSongs,
+                        )
+                    )
+            }
+            header.status.text = messages.joinToString("\n")
+            header.status.isVisible = messages.isNotEmpty()
+            header.retry.isVisible = state.error != null
+            header.calendar.notifyCalendarChanged()
+            more.isVisible = !all && entries.size > 10
+            rankings.submitList(if (all) entries else entries.take(10)) {
+                if (!restored && !state.loading) {
+                    recycler.layoutManager?.onRestoreInstanceState(
+                        if (all) model.rankingScroll else model.scroll
+                    )
+                    restored = true
+                }
             }
         }
+    }
 
-        binding.viewHistoryButton.setOnClickListener {
-            findNavController()
-                .navigateSafe(HomeFragmentDirections.actionHomeFragmentToSongHistoryFragment())
-        }
+    private fun history(range: StatsDateRange, unavailable: Boolean = false) {
+        val (start, end) = range.timestamps()
+        findNavController()
+            .navigate(
+                R.id.songHistoryFragment,
+                bundleOf("start" to start, "end" to end, "unavailable" to unavailable),
+            )
+    }
 
-        binding.statsTopSongsRecycler.apply {
-            layoutManager = LinearLayoutManager(requireContext())
-            adapter = SongStatsAdapter()
-        }
-
-        binding.statsTopAlbumsRecycler.apply {
-            layoutManager = LinearLayoutManager(requireContext())
-            adapter = AlbumStatsAdapter()
-        }
-
-        binding.statsTopArtistsRecycler.apply {
-            layoutManager = LinearLayoutManager(requireContext())
-            adapter = ArtistStatsAdapter()
-        }
-
-        collectImmediately(statsViewModel.statsData, ::updateStats)
+    override fun onPause() {
+        val scroll = binding?.statsRecycler?.layoutManager?.onSaveInstanceState()
+        if (all) model.rankingScroll = scroll else model.scroll = scroll
+        super.onPause()
     }
 
     override fun onDestroyView() {
+        binding?.statsRecycler?.adapter = null
+        binding = null
         super.onDestroyView()
-        _binding = null
     }
 
-    override fun onResume() {
-        super.onResume()
-        // Refresh stats in case the library finished loading after the initial query.
-        statsViewModel.loadStats()
-    }
+    private class DayContainer(view: View) : ViewContainer(view)
 
-    private fun updateStats(statsData: StatsData?) {
-        if (statsData == null) {
-            L.d("Stats data is null")
-            return
+    private data class DashboardRender(
+        val state: StatsUiState,
+        val category: RankingCategory,
+        val plays: Boolean,
+        val period: String,
+        val recordingError: String?,
+    )
+}
+
+internal class SingleViewAdapter(private val view: View) :
+    RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    override fun getItemCount() = 1
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
+        object : RecyclerView.ViewHolder(view) {}
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {}
+}
+
+private class RankingAdapter(private val onClick: (RankingEntry) -> Unit) :
+    ListAdapter<RankingEntry, RankingAdapter.Holder>(
+        object : DiffUtil.ItemCallback<RankingEntry>() {
+            override fun areItemsTheSame(oldItem: RankingEntry, newItem: RankingEntry) =
+                oldItem.music.uid == newItem.music.uid
+
+            override fun areContentsTheSame(oldItem: RankingEntry, newItem: RankingEntry) =
+                oldItem == newItem
         }
+    ) {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
+        Holder(ItemStatsRankingBinding.inflate(LayoutInflater.from(parent.context), parent, false))
 
-        // Update overall stats
-        val totalTimeMs = statsData.overallStats.totalListenTimeMs
-        val hours = TimeUnit.MILLISECONDS.toHours(totalTimeMs)
-        val minutes = TimeUnit.MILLISECONDS.toMinutes(totalTimeMs) % 60
-        binding.statsTotalTime.text = getString(R.string.fmt_hours_minutes, hours, minutes)
-        binding.statsTotalPlays.text = statsData.overallStats.totalPlayCount.toString()
-
-        // Update recycler views
-        (binding.statsTopSongsRecycler.adapter as? SongStatsAdapter)?.submitList(statsData.topSongs)
-        (binding.statsTopAlbumsRecycler.adapter as? AlbumStatsAdapter)?.submitList(
-            statsData.topAlbums
-        )
-        (binding.statsTopArtistsRecycler.adapter as? ArtistStatsAdapter)?.submitList(
-            statsData.topArtists
-        )
-
-        // Calendar View
-        val dailyStats = statsData.dailyStats
-        if (dailyStats.isNotEmpty()) {
-            setupCalendar(binding.calendarView, dailyStats)
-
-            val totalListenTime = dailyStats.sumOf { it.totalListenTimeMs }
-            val firstDate = dailyStats.minOf { it.date }
-            val lastDate = dailyStats.maxOf { it.date }
-            val totalDays = ChronoUnit.DAYS.between(firstDate, lastDate).toInt() + 1
-
-            val dailyAverageMs = if (totalDays > 0) totalListenTime / totalDays else 0
-            val dailyAvgHours = TimeUnit.MILLISECONDS.toHours(dailyAverageMs)
-            val dailyAvgMinutes = TimeUnit.MILLISECONDS.toMinutes(dailyAverageMs) % 60
-            binding.statsDailyAverage.text =
-                getString(R.string.fmt_hours_minutes, dailyAvgHours, dailyAvgMinutes)
-
-            val weekFields = WeekFields.of(Locale.getDefault())
-            val weeklyBuckets = dailyStats.groupBy { it.date.with(weekFields.dayOfWeek(), 1) }
-            val weeklyAverageMs =
-                weeklyBuckets.values
-                    .map { group -> group.sumOf { it.totalListenTimeMs }.toDouble() }
-                    .takeIf { it.isNotEmpty() }
-                    ?.average()
-                    ?.toLong() ?: 0
-
-            val weeklyAvgHours = TimeUnit.MILLISECONDS.toHours(weeklyAverageMs)
-            val weeklyAvgMinutes = TimeUnit.MILLISECONDS.toMinutes(weeklyAverageMs) % 60
-            binding.statsWeeklyAverage.text =
-                getString(R.string.fmt_hours_minutes, weeklyAvgHours, weeklyAvgMinutes)
-        } else {
-            binding.statsDailyAverage.text = getString(R.string.fmt_hours_minutes, 0, 0)
-            binding.statsWeeklyAverage.text = getString(R.string.fmt_hours_minutes, 0, 0)
-        }
+    override fun onBindViewHolder(holder: Holder, position: Int) {
+        holder.bind(getItem(position), position + 1)
     }
 
-    private fun setupCalendar(calendarView: CalendarView, dailyStats: List<DailyStatsInfo>) {
-        val firstDate = dailyStats.minOfOrNull { it.date } ?: return
-        val lastDate = dailyStats.maxOfOrNull { it.date } ?: return
-
-        val firstMonth = YearMonth.from(firstDate)
-        val lastMonth = YearMonth.from(lastDate)
-
-        val firstDayOfWeek = firstDayOfWeekFromLocale()
-        val statsByDate = dailyStats.associateBy { it.date }
-        val maxListenTime = dailyStats.maxOfOrNull { it.totalListenTimeMs }?.coerceAtLeast(1) ?: 1L
-
-        calendarView.setup(firstMonth, lastMonth, firstDayOfWeek)
-        calendarView.scrollToMonth(lastMonth)
-
-        calendarView.dayBinder =
-            object : MonthDayBinder<DayViewContainer> {
-                override fun create(view: View) = DayViewContainer(view)
-
-                override fun bind(container: DayViewContainer, day: CalendarDay) {
-                    container.textView.text = day.date.dayOfMonth.toString()
-                    val isCurrentMonth = day.position == DayPosition.MonthDate
-                    val statsForDay = statsByDate[day.date]
-                    val hasData = statsForDay != null && isCurrentMonth
-
-                    val baseText = com.google.android.material.R.attr.colorOnSurface
-                    val disabledText = com.google.android.material.R.attr.colorOnSurfaceVariant
-                    val textColorAttr = if (isCurrentMonth) baseText else disabledText
-                    container.textView.setTextColor(
-                        MaterialColors.getColor(container.textView, textColorAttr, 0)
-                    )
-
-                    if (hasData) {
-                        val intensity =
-                            (statsForDay!!.totalListenTimeMs.toFloat() / maxListenTime).coerceIn(
-                                0f,
-                                1f,
-                            )
-                        val activeColor =
-                            MaterialColors.getColor(container.textView, AR.attr.colorPrimary, 0)
-                        val surfaceColor =
-                            MaterialColors.getColor(
-                                container.textView,
-                                MR.attr.colorSurfaceVariant,
-                                0,
-                            )
-                        val blended =
-                            ColorUtils.blendARGB(surfaceColor, activeColor, 0.3f + 0.7f * intensity)
-                        container.textView.background =
-                            GradientDrawable().apply {
-                                cornerRadius = resources.getDimension(R.dimen.spacing_small)
-                                setColor(blended)
-                            }
-                        container.textView.setTextColor(
-                            MaterialColors.getColor(container.textView, MR.attr.colorOnPrimary, 0)
-                        )
-                    } else {
-                        container.textView.background = null
+    inner class Holder(private val binding: ItemStatsRankingBinding) :
+        RecyclerView.ViewHolder(binding.root) {
+        fun bind(entry: RankingEntry, rank: Int) {
+            binding.rank.text = java.text.NumberFormat.getIntegerInstance().format(rank)
+            binding.title.text = entry.music.name.resolve(itemView.context)
+            binding.subtitle.text =
+                when (val music = entry.music) {
+                    is Song -> {
+                        binding.cover.bind(music)
+                        music.artists.joinToString { it.name.resolve(itemView.context) }
                     }
-                }
-            }
-
-        calendarView.monthHeaderBinder =
-            object : MonthHeaderFooterBinder<MonthViewContainer> {
-                override fun create(view: View) = MonthViewContainer(view)
-
-                override fun bind(container: MonthViewContainer, month: CalendarMonth) {
-                    val monthName =
-                        month.yearMonth.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())
-                    container.textView.text = "$monthName ${month.yearMonth.year}"
-                }
-            }
-    }
-
-    inner class DayViewContainer(view: View) : ViewContainer(view) {
-        val textView: TextView = ItemCalendarDayBinding.bind(view).calendarDayText
-    }
-
-    inner class MonthViewContainer(view: View) : ViewContainer(view) {
-        val textView: TextView = ItemCalendarHeaderBinding.bind(view).calendarHeaderText
-    }
-
-    private class NoFilterArrayAdapter<T>(
-        context: android.content.Context,
-        resource: Int,
-        private val items: List<T>,
-    ) : ArrayAdapter<T>(context, resource, items) {
-        override fun getFilter() =
-            object : android.widget.Filter() {
-                override fun performFiltering(constraint: CharSequence?) =
-                    android.widget.Filter.FilterResults().apply {
-                        values = items
-                        count = items.size
+                    is Album -> {
+                        binding.cover.bind(music)
+                        music.artists.joinToString { it.name.resolve(itemView.context) }
                     }
-
-                override fun publishResults(constraint: CharSequence?, results: FilterResults?) {
-                    notifyDataSetChanged()
+                    is Artist -> {
+                        binding.cover.bind(music)
+                        ""
+                    }
+                    else -> ""
                 }
-
-                override fun convertResultToString(resultValue: Any?) =
-                    resultValue?.toString() ?: ""
-            }
-    }
-
-    private inner class SongStatsAdapter : RecyclerView.Adapter<SongStatsAdapter.ViewHolder>() {
-        private var items = listOf<SongStatsInfo>()
-
-        fun submitList(newItems: List<SongStatsInfo>) {
-            items = newItems
-            notifyDataSetChanged()
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val binding =
-                ItemStatSongBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-            return ViewHolder(binding)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            holder.bind(items[position], position + 1)
-        }
-
-        override fun getItemCount() = items.size
-
-        inner class ViewHolder(private val binding: ItemStatSongBinding) :
-            RecyclerView.ViewHolder(binding.root) {
-            fun bind(info: SongStatsInfo, rank: Int) {
-                binding.statRank.text = rank.toString()
-                binding.statSongName.text = info.song.name.resolve(itemView.context)
-                binding.statSongArtist.text =
-                    info.song.artists.joinToString { it.name.resolve(itemView.context) }
-                binding.statPlayCount.text = getString(R.string.fmt_play_count, info.playCount)
-
-                val timeMs = info.totalListenTimeMs
-                val hours = timeMs / (1000 * 60 * 60)
-                val minutes = (timeMs / (1000 * 60)) % 60
-                if (hours > 0) {
-                    binding.statListenTime.text =
-                        getString(R.string.fmt_hours_minutes, hours, minutes)
-                } else {
-                    val seconds = (timeMs / 1000) % 60
-                    binding.statListenTime.text =
-                        getString(R.string.fmt_minutes_seconds, minutes, seconds)
-                }
-            }
-        }
-    }
-
-    private inner class AlbumStatsAdapter : RecyclerView.Adapter<AlbumStatsAdapter.ViewHolder>() {
-        private var items = listOf<AlbumStatsInfo>()
-
-        fun submitList(newItems: List<AlbumStatsInfo>) {
-            items = newItems
-            notifyDataSetChanged()
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val binding =
-                ItemStatAlbumBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-            return ViewHolder(binding)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            holder.bind(items[position], position + 1)
-        }
-
-        override fun getItemCount() = items.size
-
-        inner class ViewHolder(private val binding: ItemStatAlbumBinding) :
-            RecyclerView.ViewHolder(binding.root) {
-            fun bind(info: AlbumStatsInfo, rank: Int) {
-                binding.statRank.text = rank.toString()
-                binding.statAlbumName.text = info.album.name.resolve(itemView.context)
-                binding.statAlbumArtist.text =
-                    info.album.artists.joinToString { it.name.resolve(itemView.context) }
-                binding.statPlayCount.text = getString(R.string.fmt_play_count, info.totalPlayCount)
-
-                val timeMs = info.totalListenTimeMs
-                val hours = timeMs / (1000 * 60 * 60)
-                val minutes = (timeMs / (1000 * 60)) % 60
-                if (hours > 0) {
-                    binding.statListenTime.text =
-                        getString(R.string.fmt_hours_minutes, hours, minutes)
-                } else {
-                    val seconds = (timeMs / 1000) % 60
-                    binding.statListenTime.text =
-                        getString(R.string.fmt_minutes_seconds, minutes, seconds)
-                }
-            }
-        }
-    }
-
-    private inner class ArtistStatsAdapter : RecyclerView.Adapter<ArtistStatsAdapter.ViewHolder>() {
-        private var items = listOf<ArtistStatsInfo>()
-
-        fun submitList(newItems: List<ArtistStatsInfo>) {
-            items = newItems
-            notifyDataSetChanged()
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val binding =
-                ItemStatArtistBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-            return ViewHolder(binding)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            holder.bind(items[position], position + 1)
-        }
-
-        override fun getItemCount() = items.size
-
-        inner class ViewHolder(private val binding: ItemStatArtistBinding) :
-            RecyclerView.ViewHolder(binding.root) {
-            fun bind(info: ArtistStatsInfo, rank: Int) {
-                binding.statRank.text = rank.toString()
-                binding.statArtistName.text = info.artist.name.resolve(itemView.context)
-                binding.statPlayCount.text = getString(R.string.fmt_play_count, info.totalPlayCount)
-
-                val timeMs = info.totalListenTimeMs
-                val hours = timeMs / (1000 * 60 * 60)
-                val minutes = (timeMs / (1000 * 60)) % 60
-                if (hours > 0) {
-                    binding.statListenTime.text =
-                        getString(R.string.fmt_hours_minutes, hours, minutes)
-                } else {
-                    val seconds = (timeMs / 1000) % 60
-                    binding.statListenTime.text =
-                        getString(R.string.fmt_minutes_seconds, minutes, seconds)
-                }
-            }
+            binding.subtitle.isVisible = binding.subtitle.text.isNotEmpty()
+            binding.metrics.text =
+                itemView.context.getString(
+                    R.string.stats_metrics,
+                    entry.plays,
+                    itemView.context.formatStatsDuration(entry.duration),
+                )
+            itemView.setOnClickListener { onClick(entry) }
         }
     }
 }
+
+internal fun android.content.Context.formatStatsDuration(ms: Long): String =
+    if (ms >= 3600000) getString(R.string.fmt_hours_minutes, ms / 3600000, ms / 60000 % 60)
+    else getString(R.string.fmt_minutes_seconds, ms / 60000, ms / 1000 % 60)
+
+internal fun Fragment.formatStatsDuration(ms: Long) = requireContext().formatStatsDuration(ms)

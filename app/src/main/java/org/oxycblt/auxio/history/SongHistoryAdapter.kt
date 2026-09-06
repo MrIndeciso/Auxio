@@ -21,9 +21,14 @@ package org.oxycblt.auxio.history
 import android.text.format.DateUtils
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import org.oxycblt.auxio.R
 import org.oxycblt.auxio.databinding.ItemHistorySongBinding
 import org.oxycblt.auxio.music.MusicRepository
@@ -42,13 +47,25 @@ class SongHistoryAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(getItem(position))
+        holder.bind(getItem(position), if (position > 0) getItem(position - 1) else null)
     }
 
     inner class ViewHolder(private val binding: ItemHistorySongBinding) :
         RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(playEvent: PlayEvent) {
+        fun bind(playEvent: PlayEvent, previous: PlayEvent?) {
+            val date =
+                Instant.ofEpochMilli(playEvent.timestamp)
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate()
+            val previousDate =
+                previous?.let {
+                    Instant.ofEpochMilli(it.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                }
+            androidx.core.view.ViewCompat.setAccessibilityHeading(binding.dayHeader, true)
+            binding.dayHeader.isVisible = date != previousDate
+            binding.dayHeader.text =
+                date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL))
             val context = itemView.context
             val song = musicRepository.library?.findSong(playEvent.songUid)
             if (song != null) {
@@ -61,10 +78,10 @@ class SongHistoryAdapter(
                 )
             }
             binding.songName.text =
-                song?.name?.resolve(context) ?: context.getString(R.string.cdc_unknown)
+                song?.name?.resolve(context) ?: context.getString(R.string.stats_unavailable_song)
             binding.artistName.text =
                 song?.artists?.joinToString { it.name.resolve(context) }
-                    ?: context.getString(R.string.cdc_unknown)
+                    ?: playEvent.songUid.toString()
 
             val relativeTime =
                 DateUtils.getRelativeDateTimeString(

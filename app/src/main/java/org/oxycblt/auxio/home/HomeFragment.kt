@@ -268,7 +268,7 @@ class HomeFragment : SelectionFragment<FragmentHomeBinding>() {
                 MusicType.ARTISTS -> R.id.home_artist_recycler
                 MusicType.GENRES -> R.id.home_genre_recycler
                 MusicType.PLAYLISTS -> R.id.home_playlist_recycler
-                MusicType.STATS -> R.id.stats_scroll_view
+                MusicType.STATS -> R.id.stats_recycler
             }
     }
 

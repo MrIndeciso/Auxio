@@ -22,10 +22,19 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
+import android.widget.ProgressBar
+import android.widget.TextView
+import androidx.core.os.bundleOf
+import androidx.core.view.isVisible
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
+import androidx.navigation.fragment.findNavController
+import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import dagger.hilt.android.AndroidEntryPoint
@@ -33,12 +42,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+import kotlinx.coroutines.launch
 import org.oxycblt.auxio.R
 import org.oxycblt.auxio.databinding.FragmentSongHistoryBinding
 import org.oxycblt.auxio.music.MusicRepository
 import org.oxycblt.auxio.stats.PlayEvent
+import org.oxycblt.auxio.stats.SingleViewAdapter
 import org.oxycblt.auxio.util.collectImmediately
-import org.oxycblt.auxio.util.showToast
 import org.oxycblt.auxio.util.systemBarInsetsCompat
 
 /** A fragment to display the history of played songs. */
@@ -76,12 +86,84 @@ class SongHistoryFragment : Fragment() {
         }
 
         val historyAdapter = SongHistoryAdapter(musicRepository, ::showEntryActions)
+        val controls = LinearLayout(requireContext()).apply { orientation = LinearLayout.VERTICAL }
+        val filter = MaterialButton(requireContext())
+        val status =
+            TextView(requireContext()).apply {
+                setPadding(16, 8, 16, 8)
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            }
+        val loading = ProgressBar(requireContext())
+        val retry =
+            MaterialButton(requireContext()).apply {
+                setText(R.string.stats_retry)
+                setOnClickListener { viewModel.retry() }
+            }
+        val rangeLabel =
+            TextView(requireContext()).apply {
+                text = viewModel.rangeLabel
+                isVisible = text.isNotEmpty()
+                setPadding(16, 8, 16, 8)
+            }
+        controls.addView(rangeLabel)
+        controls.addView(filter)
+        controls.addView(loading)
+        controls.addView(status)
+        controls.addView(retry)
+        filter.setOnClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setItems(
+                    arrayOf(
+                        getString(R.string.stats_history_all),
+                        getString(R.string.stats_history_unavailable),
+                    )
+                ) { _, which ->
+                    viewModel.filterUnavailable(which == 1)
+                }
+                .show()
+        }
+        val more =
+            MaterialButton(requireContext()).apply {
+                setText(R.string.stats_load_more)
+                setOnClickListener { viewModel.more() }
+            }
         binding.historyRecycler.apply {
             layoutManager = LinearLayoutManager(requireContext())
-            adapter = historyAdapter
+            adapter =
+                ConcatAdapter(SingleViewAdapter(controls), historyAdapter, SingleViewAdapter(more))
         }
 
-        collectImmediately(viewModel.history) { history -> historyAdapter.submitList(history) }
+        var restored = false
+        collectImmediately(viewModel.state) { state ->
+            historyAdapter.submitList(state.events) {
+                historyAdapter.notifyDataSetChanged()
+                if (!restored && !state.loading) {
+                    _binding
+                        ?.historyRecycler
+                        ?.layoutManager
+                        ?.onRestoreInstanceState(viewModel.scroll)
+                    restored = true
+                }
+            }
+            filter.setText(
+                if (state.unavailable) R.string.stats_history_unavailable
+                else R.string.stats_history_all
+            )
+            loading.isVisible = state.loading
+            status.text =
+                state.error
+                    ?: if (!state.loading && state.events.isEmpty())
+                        getString(R.string.stats_history_empty)
+                    else ""
+            status.isVisible = status.text.isNotEmpty()
+            retry.isVisible = state.error != null
+            more.isVisible = state.more
+        }
+    }
+
+    override fun onPause() {
+        viewModel.scroll = _binding?.historyRecycler?.layoutManager?.onSaveInstanceState()
+        super.onPause()
     }
 
     override fun onDestroyView() {
@@ -96,11 +178,18 @@ class SongHistoryFragment : Fragment() {
                 arrayOf(
                     getString(R.string.lbl_edit_history_entry),
                     getString(R.string.lbl_delete_history_entry),
+                    getString(R.string.stats_history_song),
                 )
             ) { _, which ->
                 when (which) {
                     0 -> showEditDialog(event)
                     1 -> confirmDelete(event)
+                    2 ->
+                        findNavController()
+                            .navigate(
+                                R.id.songHistoryFragment,
+                                bundleOf("songUid" to event.songUid),
+                            )
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -116,20 +205,36 @@ class SongHistoryFragment : Fragment() {
         timeInput.setText(dateFormat.format(Date(event.timestamp)))
         durationInput.setText(formatDurationInput(event.listenTimeMs))
 
-        MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.lbl_edit_history_entry)
-            .setView(view)
-            .setPositiveButton(R.string.lbl_save) { _, _ ->
+        val dialog =
+            MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.lbl_edit_history_entry)
+                .setView(view)
+                .setPositiveButton(R.string.lbl_save, null)
+                .setNegativeButton(android.R.string.cancel, null)
+                .create()
+        dialog.setOnShowListener {
+            dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
                 val timestamp = parseTimestamp(timeInput.text?.toString())
                 val duration = parseDuration(durationInput.text?.toString())
-                if (timestamp == null || duration == null) {
-                    context.showToast(R.string.err_history_invalid_input)
-                    return@setPositiveButton
+                timeInput.error =
+                    if (timestamp == null) getString(R.string.err_history_invalid_input) else null
+                durationInput.error =
+                    if (duration == null) getString(R.string.err_history_invalid_input) else null
+                if (timestamp != null && duration != null) {
+                    val save = dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE)
+                    save.isEnabled = false
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        if (viewModel.updateEvent(event.id, event.songUid, timestamp, duration))
+                            dialog.dismiss()
+                        else {
+                            durationInput.error = viewModel.state.value.error
+                            save.isEnabled = true
+                        }
+                    }
                 }
-                viewModel.updateEvent(event.id, event.songUid, timestamp, duration)
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        }
+        dialog.show()
     }
 
     private fun confirmDelete(event: PlayEvent) {
@@ -143,38 +248,9 @@ class SongHistoryFragment : Fragment() {
             .show()
     }
 
-    private fun parseTimestamp(raw: String?): Long? {
-        val text = raw?.trim().orEmpty()
-        if (text.isEmpty()) return null
-        return try {
-            dateFormat.parse(text)?.time
-        } catch (e: Exception) {
-            null
-        }
-    }
+    private fun parseTimestamp(raw: String?): Long? = HistoryInput.timestamp(raw, dateFormat)
 
-    private fun parseDuration(raw: String?): Long? {
-        val text = raw?.trim().orEmpty()
-        if (text.isEmpty()) return null
-        val parts = text.split(":").map { it.trim() }
-        val seconds =
-            when (parts.size) {
-                1 -> parts[0].toLongOrNull() ?: return null
-                2 -> {
-                    val minutes = parts[0].toLongOrNull() ?: return null
-                    val secs = parts[1].toLongOrNull() ?: return null
-                    minutes * 60 + secs
-                }
-                3 -> {
-                    val hours = parts[0].toLongOrNull() ?: return null
-                    val minutes = parts[1].toLongOrNull() ?: return null
-                    val secs = parts[2].toLongOrNull() ?: return null
-                    hours * 3600 + minutes * 60 + secs
-                }
-                else -> return null
-            }
-        return if (seconds > 0) seconds * 1000 else null
-    }
+    private fun parseDuration(raw: String?): Long? = HistoryInput.duration(raw)
 
     private fun formatDurationInput(durationMs: Long): String {
         val totalSeconds = durationMs / 1000

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Auxio Project
+ * Copyright (c) 2026 Auxio Project
  * TimePeriod.kt is part of Auxio.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -18,113 +18,59 @@
  
 package org.oxycblt.auxio.stats
 
-import java.util.Calendar
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.WeekFields
+import java.util.Locale
 
-/**
- * Represents a time period for filtering statistics.
- *
- * @author Auxio Project
- */
+/** Half-open local-date ranges use calendar arithmetic, including DST and year boundaries. */
+data class StatsDateRange(val first: LocalDate?, val endExclusive: LocalDate?) {
+    fun timestamps(zone: ZoneId = ZoneId.systemDefault()): Pair<Long, Long> =
+        (first?.atStartOfDay(zone)?.toInstant()?.toEpochMilli() ?: Long.MIN_VALUE) to
+            (endExclusive?.atStartOfDay(zone)?.toInstant()?.toEpochMilli() ?: Long.MAX_VALUE)
+
+    fun contains(timestamp: Long, zone: ZoneId = ZoneId.systemDefault()): Boolean {
+        val (start, end) = timestamps(zone)
+        return (first == null || timestamp >= start) && (endExclusive == null || timestamp < end)
+    }
+}
+
 enum class TimePeriod {
     ALL_TIME,
+    TODAY,
     THIS_YEAR,
     LAST_YEAR,
     LAST_12_MONTHS,
     THIS_MONTH,
     LAST_MONTH,
     THIS_WEEK,
-    LAST_WEEK;
+    LAST_WEEK,
+    CUSTOM;
 
-    /**
-     * Get the timestamp range for this time period.
-     *
-     * @return Pair of (start timestamp, end timestamp) in milliseconds.
-     */
-    fun getTimeRange(): Pair<Long, Long> {
-        val now = System.currentTimeMillis()
-        val calendar = Calendar.getInstance()
-
+    fun range(
+        today: LocalDate = LocalDate.now(),
+        locale: Locale = Locale.getDefault(),
+    ): StatsDateRange {
+        val month = today.withDayOfMonth(1)
+        val year = today.withDayOfYear(1)
+        val week = today.with(WeekFields.of(locale).dayOfWeek(), 1)
         return when (this) {
-            ALL_TIME -> Pair(0L, now)
-            THIS_YEAR -> {
-                calendar.timeInMillis = now
-                calendar.set(Calendar.MONTH, Calendar.JANUARY)
-                calendar.set(Calendar.DAY_OF_MONTH, 1)
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                calendar.set(Calendar.MILLISECOND, 0)
-                Pair(calendar.timeInMillis, now)
-            }
-            LAST_YEAR -> {
-                calendar.timeInMillis = now
-                calendar.add(Calendar.YEAR, -1)
-                calendar.set(Calendar.MONTH, Calendar.JANUARY)
-                calendar.set(Calendar.DAY_OF_MONTH, 1)
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                calendar.set(Calendar.MILLISECOND, 0)
-                val start = calendar.timeInMillis
-
-                calendar.add(Calendar.YEAR, 1)
-                calendar.add(Calendar.MILLISECOND, -1)
-                val end = calendar.timeInMillis
-                Pair(start, end)
-            }
-            LAST_12_MONTHS -> {
-                calendar.timeInMillis = now
-                calendar.add(Calendar.MONTH, -12)
-                Pair(calendar.timeInMillis, now)
-            }
-            THIS_MONTH -> {
-                calendar.timeInMillis = now
-                calendar.set(Calendar.DAY_OF_MONTH, 1)
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                calendar.set(Calendar.MILLISECOND, 0)
-                Pair(calendar.timeInMillis, now)
-            }
-            LAST_MONTH -> {
-                calendar.timeInMillis = now
-                calendar.add(Calendar.MONTH, -1)
-                calendar.set(Calendar.DAY_OF_MONTH, 1)
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                calendar.set(Calendar.MILLISECOND, 0)
-                val start = calendar.timeInMillis
-
-                calendar.add(Calendar.MONTH, 1)
-                calendar.add(Calendar.MILLISECOND, -1)
-                val end = calendar.timeInMillis
-                Pair(start, end)
-            }
-            THIS_WEEK -> {
-                calendar.timeInMillis = now
-                calendar.set(Calendar.DAY_OF_WEEK, calendar.firstDayOfWeek)
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                calendar.set(Calendar.MILLISECOND, 0)
-                Pair(calendar.timeInMillis, now)
-            }
-            LAST_WEEK -> {
-                calendar.timeInMillis = now
-                calendar.add(Calendar.WEEK_OF_YEAR, -1)
-                calendar.set(Calendar.DAY_OF_WEEK, calendar.firstDayOfWeek)
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                calendar.set(Calendar.MILLISECOND, 0)
-                val start = calendar.timeInMillis
-
-                calendar.add(Calendar.WEEK_OF_YEAR, 1)
-                calendar.add(Calendar.MILLISECOND, -1)
-                val end = calendar.timeInMillis
-                Pair(start, end)
-            }
+            ALL_TIME,
+            CUSTOM -> StatsDateRange(null, null)
+            TODAY -> StatsDateRange(today, today.plusDays(1))
+            THIS_YEAR -> StatsDateRange(year, today.plusDays(1))
+            LAST_YEAR -> StatsDateRange(year.minusYears(1), year)
+            LAST_12_MONTHS -> StatsDateRange(today.minusMonths(12), today.plusDays(1))
+            THIS_MONTH -> StatsDateRange(month, today.plusDays(1))
+            LAST_MONTH -> StatsDateRange(month.minusMonths(1), month)
+            THIS_WEEK -> StatsDateRange(week, today.plusDays(1))
+            LAST_WEEK -> StatsDateRange(week.minusWeeks(1), week)
         }
     }
+
+    /** Compatibility with the older inclusive DAO API. */
+    fun getTimeRange(): Pair<Long, Long> =
+        range().timestamps().let { (start, end) ->
+            start to if (end == Long.MAX_VALUE) end else end - 1
+        }
 }

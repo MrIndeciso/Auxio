@@ -529,4 +529,34 @@
     <string name="lbl_delete">Delete</string>
     <string name="err_history_invalid_input">Enter a valid time and duration.</string>
 
+    <!-- Statistics dashboard. Uses the same English fallback as existing custom statistics labels. -->
+
+ <string name="stats_today">Today</string>
+ <string name="stats_custom">Custom date range</string>
+ <string name="stats_previous_month">Previous month</string>
+ <string name="stats_next_month">Next month</string>
+ <string name="stats_rank_by_plays">Rank by plays</string>
+ <string name="stats_loading">Loading statistics</string>
+ <string name="stats_retry">Retry</string>
+ <string name="stats_see_all">See all</string>
+ <string name="stats_empty">No listening recorded in this period.</string>
+ <string name="stats_empty_ranking">No library entries in this ranking.</string>
+ <string name="stats_unavailable">Unavailable songs · Plays: %1$d · %2$s</string>
+ <string name="stats_unavailable_song">Unavailable song</string>
+ <string name="stats_average">Daily average %1$s · Weekly average %2$s</string>
+ <plurals name="stats_inconsistent">
+  <item quantity="one">%1$d stored song total differs from history. Totals shown here use history.</item>
+  <item quantity="other">%1$d stored song totals differ from history. Totals shown here use history.</item>
+ </plurals>
+ <string name="stats_metrics">Plays: %1$d · %2$s</string>
+ <string name="stats_day">%1$s: %2$s listened. Open history.</string>
+ <string name="stats_history_all">All recorded events</string>
+ <string name="stats_history_unavailable">Unavailable songs</string>
+ <string name="stats_history_empty">No history for this filter.</string>
+ <string name="stats_load_more">Load more</string>
+ <string name="stats_history_song">History for this song</string>
+
+ <string name="stats_previous_glyph" translatable="false">‹</string>
+ <string name="stats_next_glyph" translatable="false">›</string>
+
 </resources>

@@ -31,7 +31,7 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 interface StatsModule {
-    @Binds fun repository(statsRepository: StatsRepositoryImpl): StatsRepository
+    @Singleton @Binds fun repository(statsRepository: StatsRepositoryImpl): StatsRepository
 }
 
 @Module
@@ -41,7 +41,7 @@ class StatsRoomModule {
     @Provides
     fun database(@ApplicationContext context: Context) =
         Room.databaseBuilder(context.applicationContext, StatsDatabase::class.java, "stats.db")
-            .addMigrations(StatsDatabase.MIGRATION_2_3)
+            .addMigrations(StatsDatabase.MIGRATION_2_3, StatsDatabase.MIGRATION_3_4)
             .build()
 
     @Provides fun statsDao(database: StatsDatabase) = database.statsDao()

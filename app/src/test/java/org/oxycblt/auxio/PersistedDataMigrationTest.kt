@@ -22,6 +22,7 @@ import android.app.Application
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -44,14 +45,21 @@ class PersistedDataMigrationTest {
         repeat(2) {
             val room =
                 Room.databaseBuilder(context, StatsDatabase::class.java, file.name)
-                    .addMigrations(StatsDatabase.MIGRATION_2_3)
+                    .addMigrations(StatsDatabase.MIGRATION_2_3, StatsDatabase.MIGRATION_3_4)
                     .allowMainThreadQueries()
                     .build()
             try {
                 val db = room.openHelper.writableDatabase
-                assertEquals(3, db.version)
-                assertEquals(before, DatabaseFixture.dump { db.query(it) })
+                assertEquals(4, db.version)
+                assertEquals(
+                    before,
+                    (DatabaseFixture.dump { db.query(it) }).filterKeys { it != "ListeningSession" },
+                )
                 DatabaseFixture.integrity { db.query(it) }
+                db.query("SELECT COUNT(*) FROM PlayEvent").use { c ->
+                    check(c.moveToFirst())
+                    assertEquals(7100, c.getInt(0))
+                }
                 // Exercise parameter binding used by history editing, not only full-table reads.
                 db.query("SELECT songUid FROM SongStats LIMIT 1").use { cursor ->
                     check(cursor.moveToFirst())
@@ -62,6 +70,69 @@ class PersistedDataMigrationTest {
                         check(room.statsDao().getAllPlayEventsForSong(uid).isNotEmpty())
                     }
                 }
+            } finally {
+                room.close()
+            }
+        }
+    }
+
+    @Test
+    fun installedSchemaThreeMigratesWithoutChangingAnyHistoricalField() {
+        val file = DatabaseFixture.copy(context, "stats.db")
+        val helper =
+            androidx.sqlite.db.framework
+                .FrameworkSQLiteOpenHelperFactory()
+                .create(
+                    androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+                        .name(file.name)
+                        .callback(
+                            object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(3) {
+                                override fun onCreate(
+                                    db: androidx.sqlite.db.SupportSQLiteDatabase
+                                ) {
+                                    error("Expected fixture")
+                                }
+
+                                override fun onUpgrade(
+                                    db: androidx.sqlite.db.SupportSQLiteDatabase,
+                                    oldVersion: Int,
+                                    newVersion: Int,
+                                ) {
+                                    assertEquals(2, oldVersion)
+                                    StatsDatabase.MIGRATION_2_3.migrate(db)
+                                }
+                            }
+                        )
+                        .build()
+                )
+        assertEquals(3, helper.writableDatabase.version)
+        val before = DatabaseFixture.dump { helper.writableDatabase.query(it) }
+        helper.close()
+        repeat(2) {
+            val room =
+                Room.databaseBuilder(context, StatsDatabase::class.java, file.name)
+                    .addMigrations(StatsDatabase.MIGRATION_3_4)
+                    .allowMainThreadQueries()
+                    .build()
+            try {
+                val db = room.openHelper.writableDatabase
+                assertEquals(4, db.version)
+                assertEquals(
+                    before,
+                    (DatabaseFixture.dump { db.query(it) }).filterKeys { it != "ListeningSession" },
+                )
+                kotlinx.coroutines.runBlocking {
+                    val music =
+                        io.mockk.mockk<org.oxycblt.auxio.music.MusicRepository>(relaxed = true)
+                    io.mockk.every { music.library } returns null
+                    val repository =
+                        org.oxycblt.auxio.stats.StatsRepositoryImpl(room.statsDao(), music)
+                    val records = repository.observeRecords().first()
+                    assertEquals(7100, records.events.size)
+                    assertEquals(1167646409L, records.events.sumOf { it.listenTimeMs })
+                    assertEquals(883, records.aggregates.size)
+                }
+                DatabaseFixture.integrity { db.query(it) }
             } finally {
                 room.close()
             }

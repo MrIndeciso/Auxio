@@ -16,8 +16,8 @@ android {
 
     defaultConfig {
         applicationId namespace
-        versionName "4.1.5"
-        versionCode 75
+        versionName "4.1.5-stats.1"
+        versionCode 76
 
         minSdk min_sdk
         // randomly flickers between deprecated and required depending on what mood my gradle is in
@@ -88,6 +88,7 @@ kotlin {
 
 dependencies {
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2'
     testImplementation 'io.mockk:mockk:1.14.9'
     testImplementation 'org.robolectric:robolectric:4.16.1'
     testImplementation 'androidx.test:core-ktx:1.7.0'
